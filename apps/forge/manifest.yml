@@ -1,0 +1,52 @@
+app:
+  id: ari:cloud:ecosystem::app/7bf74326-526a-4429-b4cc-aa043fb1949a
+  runtime:
+    name: nodejs24.x
+environment:
+  variables:
+    - REMOTE_SERVICE_URL
+modules:
+  endpoint:
+    - key: a2a-json-rpc-endpoint
+      remote: backend-service
+      route:
+        path: /a2a/json-rpc
+    - key: atlassian-installed-endpoint
+      remote: backend-service
+      route:
+        path: /atlassian/installed
+    - key: atlassian-config-endpoint
+      remote: backend-service
+      route:
+        path: /atlassian/config
+  rovo:agentConnector:
+    - key: jira-agent-connector
+      name: Jira Agent Assignment
+      description: Assigns tasks to AI agents in Jira
+      protocols:
+        agent2Agent:
+          jsonRpcTransport:
+            endpoint: a2a-json-rpc-endpoint
+  trigger:
+    - key: installation-trigger
+      endpoint: atlassian-installed-endpoint
+      events:
+        - avi:forge:installed:app
+permissions:
+  scopes:
+    - read:app-system-token
+    - read:app-user-token
+    - read:jira-work
+remotes:
+  - key: backend-service
+    baseUrl: ${REMOTE_SERVICE_URL}
+    operations:
+      - compute
+      - storage
+    storage:
+      inScopeEUD: true
+    auth:
+      appSystemToken:
+        enabled: true
+      appUserToken:
+        enabled: true

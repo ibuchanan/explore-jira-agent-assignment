@@ -1,0 +1,28 @@
+{
+  "id": "4d6aef51-4dfb-4c58-a2a1-61685d408249",
+  "context": "ari:cloud:jira::site/89a6b224-3b44-4cef-8e4d-37aff29af277",
+  "installerAccountId": "557057:3d0e64ae-35d3-490d-b6d9-d81c981476d0",
+  "app": {
+    "id": "7bf74326-526a-4429-b4cc-aa043fb1949a",
+    "name": "explore-jira-agent-assigment",
+    "ownerAccountId": "557057:3d0e64ae-35d3-490d-b6d9-d81c981476d0",
+    "version": "2.8.0"
+  },
+  "environment": {
+    "id": "a05c3c55-6252-4368-a8f9-fc64b1cbfa96"
+  },
+  "eventType": "avi:forge:installed:app",
+  "selfGenerated": false,
+  "permissions": {
+    "scopes": [
+      "read:jira-work",
+      "read:app-system-token",
+      "read:app-user-token",
+      "read:app-system-token",
+      "read:app-user-token"
+    ],
+    "external": {
+      "fetch": []
+    }
+  }
+}

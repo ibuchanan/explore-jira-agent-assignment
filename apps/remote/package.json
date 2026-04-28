@@ -1,0 +1,42 @@
+{
+  "name": "remote-agent-backend",
+  "version": "1.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "check": "npm run lint && npm run format:check && npm run typecheck",
+    "clean": "rm -rf ./dist ./database",
+    "dev": "npm run dev:tunnel && npm run dev:remote",
+    "dev:remote": "tsx watch src/server.ts",
+    "dev:tunnel": "source .env && zrok share reserved \"$HOSTNAME\"",
+    "format": "biome format --write",
+    "format:check": "biome format",
+    "generate": "echo 'Not implemented'",
+    "generate:openapi": "echo 'Not implemented'",
+    "generate:rovo": "echo 'Not implemented'",
+    "lint": "npm run lint:check",
+    "lint:check": "biome lint",
+    "lint:fix": "biome lint --write",
+    "prepare": "echo 'Not implemented'",
+    "preview": "echo 'Not implemented'",
+    "start": "node dist/server.js",
+    "test": "echo 'Not implemented'",
+    "test:coverage": "echo 'Not implemented'",
+    "todo": "grep -rn 'TODO' --exclude='package.json' . --color=auto || echo 'No TODOs found!'",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "express": "^4.18",
+    "forge-ahead": "*",
+    "vitest": "^4.1.2"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4",
+    "@types/express": "^4.17",
+    "@types/node": "^20.10",
+    "tsx": "^4.7",
+    "typescript": "^6.0"
+  }
+}

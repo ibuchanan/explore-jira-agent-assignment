@@ -1,0 +1,41 @@
+{
+  "app": {
+    "id": "ari:cloud:ecosystem::app/7bf74326-526a-4429-b4cc-aa043fb1949a",
+    "version": "9",
+    "appVersion": "2.8.0",
+    "installationId": "ari:cloud:ecosystem::installation/1d37259a-71b4-4ba1-9415-002264217368",
+    "apiBaseUrl": "https://api.atlassian.com/ex/jira/89a6b224-3b44-4cef-8e4d-37aff29af277",
+    "environment": {
+      "type": "DEVELOPMENT",
+      "id": "ari:cloud:ecosystem::environment/7bf74326-526a-4429-b4cc-aa043fb1949a/a05c3c55-6252-4368-a8f9-fc64b1cbfa96"
+    },
+    "module": {
+      "type": "rovo:agentConnector",
+      "key": "jira-agent-connector"
+    },
+    "installation": {
+      "id": "ari:cloud:ecosystem::installation/1d37259a-71b4-4ba1-9415-002264217368",
+      "contexts": [
+        {
+          "name": "jira",
+          "apiBaseUrl": "https://api.atlassian.com/ex/jira/89a6b224-3b44-4cef-8e4d-37aff29af277"
+        }
+      ]
+    }
+  },
+  "context": {
+    "cloudId": "89a6b224-3b44-4cef-8e4d-37aff29af277",
+    "moduleKey": "jira-agent-connector",
+    "userAccess": {
+      "enabled": false,
+      "hasAccess": true
+    }
+  },
+  "principal": "557057:3d0e64ae-35d3-490d-b6d9-d81c981476d0",
+  "aud": "ari:cloud:ecosystem::app/7bf74326-526a-4429-b4cc-aa043fb1949a",
+  "nbf": 1774552350,
+  "iss": "forge/invocation-token",
+  "iat": 1774552380,
+  "exp": 1774552405,
+  "jti": "47cb48268912afcdeee5a56272e5016733bf30e3"
+}

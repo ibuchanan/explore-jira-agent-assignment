@@ -1,0 +1,60 @@
+{
+  "name": "forge-ahead",
+  "version": "0.1.0",
+  "private": true,
+  "description": "An experimental library of tools to make working with Atlassian Forge just a little better.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./errors": "./dist/util/errors.mjs",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.mts",
+  "bin": {
+    "actiontypes": "./dist/actiontypes.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "changelog": "git cliff",
+    "check": "npm run test && npm run lint && npm run format:check && npm run typecheck",
+    "check:arch": "vitest test/architecture.test.ts",
+    "clean": "rm -rf ./dist",
+    "dev": "tsdown --watch",
+    "format": "biome format --write",
+    "format:check": "biome format",
+    "generate": "echo 'Not implemented'",
+    "generate:openapi": "echo 'Not implemented'",
+    "generate:rovo": "echo 'Not implemented'",
+    "lint": "npm run lint:check",
+    "lint:check": "biome lint",
+    "lint:fix": "biome lint --write",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run build && npm test",
+    "preview": "echo 'Not implemented'",
+    "start": "echo 'Not implemented'",
+    "test": "vitest run",
+    "test:watch": "vitest watch",
+    "test:coverage": "vitest run --coverage",
+    "todo": "grep -rn 'TODO' --exclude='package.json' . --color=auto || echo 'No TODOs found!'",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@forge/api": "^7.1",
+    "jose": "^5.0",
+    "neverthrow": "^8.2",
+    "typescript": "^6.0",
+    "yaml": "^2.8"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4",
+    "@types/node": "24",
+    "@vitest/coverage-v8": "^4.0",
+    "archunit": "^2.1",
+    "tsdown": "^0.21",
+    "vitest": "^4.0"
+  }
+}

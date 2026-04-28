@@ -1,0 +1,35 @@
+{
+  "name": "explore-jira-agent-assignment",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Exploration Forge App for integrating AI agents running on external infrastructure (Remote Agents) with Jira Cloud",
+  "license": "Apache-2.0",
+  "packageManager": "npm@10.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "changelog": "turbo run changelog",
+    "check": "turbo run check",
+    "clean": "turbo run clean",
+    "dev": "turbo run dev",
+    "dev:remote": "turbo run dev:remote --filter=remote-agent-backend",
+    "format": "turbo run format",
+    "format:check": "turbo run format:check",
+    "forge:deploy": "turbo run forge:deploy --filter=explore-jira-agent-assigment",
+    "forge:install": "turbo run forge:install --filter=explore-jira-agent-assigment",
+    "forge:uninstall": "turbo run forge:uninstall --filter=explore-jira-agent-assigment",
+    "generate": "turbo run generate",
+    "lint": "turbo run lint",
+    "lint:fix": "turbo run lint:fix",
+    "test": "turbo run test",
+    "test:coverage": "turbo run test:coverage",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "turbo": "^2.3",
+    "typescript": "^6.0"
+  }
+}
