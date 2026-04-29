@@ -30,8 +30,7 @@
   },
   "dependencies": {
     "@forge/api": "^7.1",
-    "forge-ahead": "*",
-    "yaml": "^2.8"
+    "forge-ahead": "*"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4",
@@ -39,7 +38,8 @@
     "archunit": "^2.1",
     "openapi-typescript": "^7.13",
     "tsx": "^4.21",
-    "typescript": "^6.0",
-    "vitest": "^4.1"
+    "typescript": "^5.9",
+    "vitest": "^4.1",
+    "yaml": "^2.8"
   }
 }
