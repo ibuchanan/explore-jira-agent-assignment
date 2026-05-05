@@ -1,7 +1,32 @@
-import { err, ok, type Result } from "neverthrow";
+import {
+  err,
+  errAsync,
+  fromAsyncThrowable,
+  fromPromise,
+  fromSafePromise,
+  fromThrowable,
+  ok,
+  okAsync,
+  type Result,
+  ResultAsync,
+  safeTry,
+} from "neverthrow";
 
-// Re-export neverthrow essentials so consumers don't need dual imports
-export { err, ok, type Result };
+// Re-export neverthrow essentials so consumers don't need dual imports.
+// Result instance methods such as map, mapErr, and match remain available on Result values.
+export {
+  err,
+  errAsync,
+  fromAsyncThrowable,
+  fromPromise,
+  fromSafePromise,
+  fromThrowable,
+  ok,
+  okAsync,
+  type Result,
+  ResultAsync,
+  safeTry,
+};
 
 /**
  * RFC 9457: Problem Details for HTTP APIs

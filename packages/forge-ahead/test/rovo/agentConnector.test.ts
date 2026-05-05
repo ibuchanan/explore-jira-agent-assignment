@@ -1,19 +1,19 @@
 import { describe, expect, it } from "vitest";
+import type {
+  JsonRpcRequest,
+  JsonRpcResponse,
+} from "../../src/rovo/agentConnector";
 import {
   ACTIVE_TASK_STATES,
-  TASK_STATE_TRANSITIONS,
-  TERMINAL_TASK_STATES,
   formatAgentConnectorTaskResponse,
   getAllowedTransitions,
   isActiveState,
   isTerminalState,
   isValidAgentConnectorResponse,
   isValidTransition,
+  TASK_STATE_TRANSITIONS,
   type Task,
-} from "../../src/rovo/agentConnector";
-import type {
-  JsonRpcRequest,
-  JsonRpcResponse,
+  TERMINAL_TASK_STATES,
 } from "../../src/rovo/agentConnector";
 
 // Type-only import retained for Protocol Compliance test below — it ensures

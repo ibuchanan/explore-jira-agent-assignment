@@ -172,7 +172,6 @@ redeploy the app and upgrade the installation.
 - `manifest.yml` — Forge modules, remotes, token settings, runtime, and scopes
 - `src/index.ts` — exports Forge handlers referenced by the app
 - `src/resolvers/agent.ts` — JSON-RPC handler and backend forwarding logic
-- `src/resolvers/installation.ts` — installation lifecycle handler
 - `tests/forge/` — manifest, module, endpoint, and architecture tests
 - `vitest.config.ts` — test configuration for this workspace
 
@@ -198,21 +197,15 @@ JSON-RPC responses for Jira.
 
 ## Installation handling
 
-`src/resolvers/installation.ts` handles 
-`avi:forge:installed:app` trigger events.
-It currently:
+Installation handling is remote-only in this sample. The manifest subscribes to
+`avi:forge:installed:app` with `installation-trigger` and routes that lifecycle
+event directly to the remote endpoint declared as `atlassian-installed-endpoint`
+(`/atlassian/installed`). The Forge app should not export a local installation
+handler unless the manifest is changed to use a Forge function trigger.
 
-1. logs installation metadata
-2. extracts the Jira cloud ID from the event context
-3. fetches the Jira site base URL with the Jira server info API
-4. logs the resolved installation details
-
-The current handler logs installation details 
-and resolves the Jira base URL.
-In a complete implementation, 
-ensure installation metadata is persisted 
-by the remote service 
-and linked to the correct tenant.
+The remote service is responsible for validating the Forge Invocation Token,
+extracting the tenant cloud ID from the lifecycle payload, resolving the Jira
+base URL, and persisting the installation mapping.
 
 ## Environment variables
 

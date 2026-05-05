@@ -212,7 +212,6 @@ or testing the sample's task state behavior.
 
 - `apps/forge/manifest.yml` — Forge modules, remotes, scopes, and triggers
 - `apps/forge/src/resolvers/agent.ts` — Forge-side JSON-RPC forwarding
-- `apps/forge/src/resolvers/installation.ts` — Forge installation event handling
 - `apps/remote/src/server.ts` — remote installation and task endpoints
 - `apps/remote/src/auth.ts` — FIT validation middleware for Forge remotes
 - `apps/remote/src/storage.ts` — simple local persistence for sample state

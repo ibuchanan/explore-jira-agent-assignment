@@ -35,6 +35,8 @@
  */
 
 import { asApp, asUser } from "@forge/api";
+import type { ProblemDetails, Result } from "../util/errors";
+import { ok, StandardError } from "../util/errors";
 import type { CommonEvent } from "./function";
 import { truncateEvents } from "./logging";
 import type { JSONValue } from "./types";
@@ -52,6 +54,28 @@ interface ForgeAuth {
   asApp: typeof asApp;
   /** Create a user-level authenticated API client */
   asUser: typeof asUser;
+}
+
+type ForgeAuthClient = ReturnType<typeof asApp> | ReturnType<typeof asUser>;
+
+export type AuthStrategy = "asUserAccount" | "asUserContext" | "asApp";
+
+export type AuthDiagnosticReason =
+  | "installerAccountId"
+  | "upgraderAccountId"
+  | "userAccessEnabled"
+  | "noUserContext";
+
+export interface AuthDiagnostics {
+  strategy: AuthStrategy;
+  reason: AuthDiagnosticReason;
+  context: JSONValue;
+  accountId?: string;
+}
+
+export interface AuthForEvent {
+  auth: ForgeAuthClient;
+  diagnostics: AuthDiagnostics;
 }
 
 /**
@@ -210,34 +234,60 @@ function hasUserAccessEnabled(event: CommonEvent): boolean {
 export function getAuthForEvent(
   event: CommonEvent,
   api: ForgeAuth = { asUser, asApp },
-) {
-  console.debug(
-    `auth for context: ${JSON.stringify(truncateEvents(event.context as JSONValue))}`,
-  );
+): Result<AuthForEvent, ProblemDetails> {
+  const context = truncateEvents(event.context as JSONValue);
+
+  if (!event.context?.cloudId || !event.context?.moduleKey) {
+    return StandardError.getOrDefault(400).error(
+      "Forge event context must include cloudId and moduleKey to select an auth strategy",
+    );
+  }
 
   // Strategy 1: Installation event with installer account
   if (hasInstallerAccountId(event)) {
-    console.debug(
-      `auth strategy: installerAccountId → asUser("${event.installerAccountId}")`,
-    );
-    return api.asUser(event.installerAccountId);
+    return ok({
+      auth: api.asUser(event.installerAccountId),
+      diagnostics: {
+        strategy: "asUserAccount",
+        reason: "installerAccountId",
+        accountId: event.installerAccountId,
+        context,
+      },
+    });
   }
 
   // Strategy 2: Upgrade event with upgrader account
   if (hasUpgraderAccountId(event)) {
-    console.debug(
-      `auth strategy: upgraderAccountId → asUser("${event.upgraderAccountId}")`,
-    );
-    return api.asUser(event.upgraderAccountId);
+    return ok({
+      auth: api.asUser(event.upgraderAccountId),
+      diagnostics: {
+        strategy: "asUserAccount",
+        reason: "upgraderAccountId",
+        accountId: event.upgraderAccountId,
+        context,
+      },
+    });
   }
 
   // Strategy 3: User context available
   if (hasUserAccessEnabled(event)) {
-    console.debug(`auth strategy: userAccess.enabled → asUser()`);
-    return api.asUser();
+    return ok({
+      auth: api.asUser(),
+      diagnostics: {
+        strategy: "asUserContext",
+        reason: "userAccessEnabled",
+        context,
+      },
+    });
   }
 
   // Strategy 4: Default to app-level auth
-  console.debug(`auth strategy: default → asApp()`);
-  return api.asApp();
+  return ok({
+    auth: api.asApp(),
+    diagnostics: {
+      strategy: "asApp",
+      reason: "noUserContext",
+      context,
+    },
+  });
 }

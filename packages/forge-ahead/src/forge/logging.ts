@@ -200,16 +200,6 @@ export function truncateEvents(obj: JSONValue): JSONValue {
  * };
  * ```
  *
- * @example
- * ```typescript
- * // Scheduled trigger
- * export const dailySync: ScheduledFunction = async (request, context) => {
- *   const result = await syncDataWithExternalSystem();
- *   logResult(result, "Daily sync");
- *   // Success: Daily sync completed successfully
- * };
- * ```
- *
  * @see {@link https://developer.atlassian.com/platform/forge/events-reference/life-cycle/ | Lifecycle Events}
  * @see {@link https://developer.atlassian.com/platform/forge/events-reference/scheduled-trigger/ | Scheduled Triggers}
  */
@@ -279,17 +269,6 @@ export function logResult<T>(
  *   // Debug: Installation context: {...}
  *
  *   await setupApp();
- * };
- * ```
- *
- * @example
- * ```typescript
- * // WebTrigger with method and path
- * export const webhook: WebtriggerFunction = async (request, context) => {
- *   logContext(context, `${request.method} ${request.path}`);
- *   // Debug: POST /webhook context: {...}
- *
- *   return buildSuccessResponse({ received: true });
  * };
  * ```
  *

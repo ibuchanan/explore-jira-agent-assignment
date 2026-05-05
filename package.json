@@ -1,6 +1,6 @@
 {
   "name": "explore-jira-agent-assignment",
-  "version": "0.0.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Exploration Forge App for integrating AI agents running on external infrastructure (Remote Agents) with Jira Cloud",
   "license": "Apache-2.0",
@@ -29,6 +29,7 @@
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.14",
     "turbo": "^2.3",
     "typescript": "^5.9"
   }

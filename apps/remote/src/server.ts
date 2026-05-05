@@ -24,7 +24,7 @@ import {
   tasks,
 } from "./storage.js";
 
-const app = express();
+export const app = express();
 app.use(express.json());
 
 // ============================================================================
@@ -204,8 +204,7 @@ async function handleMessageSend({
 async function handleTasksGet({
   params,
 }: JsonRpcHandlerParams): Promise<unknown> {
-  // NOTE: Docs specify 'taskId' but Jira actually sends 'id'
-  const taskId = (params.id || params.taskId) as string;
+  const taskId = params.taskId as string;
   const task = tasks.get(taskId);
 
   if (!task) {
@@ -229,8 +228,7 @@ async function handleTasksGet({
 async function handleTasksCancel({
   params,
 }: JsonRpcHandlerParams): Promise<unknown> {
-  // NOTE: Docs specify 'taskId' but Jira actually sends 'id'
-  const taskId = (params.id || params.taskId) as string;
+  const taskId = params.taskId as string;
   const task = tasks.get(taskId);
 
   if (!task) {
@@ -580,14 +578,16 @@ function transitionTaskToWorking(taskId: string, context: AgentContext): void {
 // Start Server
 // ============================================================================
 
-// Load data on startup
-loadData();
+if (process.env.NODE_ENV !== "test") {
+  // Load data on startup
+  loadData();
 
-app.listen(PORT, () => {
-  console.log(`Remote agent backend service running on port ${PORT}`);
-  console.log(`Endpoints:`);
-  console.log(`  - POST /atlassian/installed`);
-  console.log(`  - POST /a2a/json-rpc`);
-  console.log(`  - POST /atlassian/config`);
-  console.log(`  - POST /tasks/:taskId/advance`);
-});
+  app.listen(PORT, () => {
+    console.log(`Remote agent backend service running on port ${PORT}`);
+    console.log(`Endpoints:`);
+    console.log(`  - POST /atlassian/installed`);
+    console.log(`  - POST /a2a/json-rpc`);
+    console.log(`  - POST /atlassian/config`);
+    console.log(`  - POST /tasks/:taskId/advance`);
+  });
+}

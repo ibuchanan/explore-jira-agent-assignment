@@ -1,44 +1,161 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import installationWebhook from "./data/installation-webhook.json";
 
-/**
- * Test suite for installation webhook endpoint
- *
- * Validates that the remote service can accept installation webhooks
- * and extract the required fields per the recommended schema:
- * https://docs.remote-agents.jira.dev/installation#recommended-schema-for-jirainstallations-table
- *
- * Required fields:
- * - id (installationId)
- * - context (contains cloudId)
- * - installerAccountId (optional but recommended for audit)
- */
-describe("Installation Webhook Endpoint", () => {
-  it("should have required installation ID", () => {
-    // id property is the installationId
-    expect(installationWebhook.id).toBeDefined();
-    expect(installationWebhook.id).toMatch(/^[a-f0-9-]+$/);
+const validateAuthHeader = vi.fn();
+const saveData = vi.fn();
+const fetchJiraServerInfo = vi.fn();
+
+vi.mock("forge-ahead", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("forge-ahead")>();
+  return {
+    ...actual,
+    validateAuthHeader,
+  };
+});
+
+vi.mock("../src/storage.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/storage.js")>();
+  return {
+    ...actual,
+    saveData,
+  };
+});
+
+const { app } = await import("../src/server.js");
+const { installations } = await import("../src/storage.js");
+
+const cloudId = "89a6b224-3b44-4cef-8e4d-37aff29af277";
+const baseUrl = "https://example.atlassian.net";
+const realFetch = globalThis.fetch;
+
+async function postInstallation(
+  body: unknown,
+  options: { authorization?: string } = { authorization: "Bearer test-fit" },
+): Promise<Response> {
+  const { createServer } = await import("node:http");
+
+  const server = createServer(app);
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") {
+    server.close();
+    throw new Error("Could not start test server");
+  }
+
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+  };
+  if (options.authorization) {
+    headers.authorization = options.authorization;
+  }
+
+  try {
+    return await fetch(`http://127.0.0.1:${address.port}/atlassian/installed`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+  } finally {
+    server.close();
+  }
+}
+
+describe("Installation lifecycle remote endpoint contract", () => {
+  beforeEach(() => {
+    installations.clear();
+    saveData.mockClear();
+    fetchJiraServerInfo.mockReset();
+    fetchJiraServerInfo.mockResolvedValue(
+      Response.json({ baseUrl }, { status: 200 }),
+    );
+    validateAuthHeader.mockReset();
+    validateAuthHeader.mockResolvedValue({
+      isErr: () => false,
+      value: { context: { cloudId, moduleKey: "installation-trigger" } },
+    });
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.href
+              : input.url;
+        if (url.startsWith("http://127.0.0.1:")) {
+          return realFetch(input, init);
+        }
+        return fetchJiraServerInfo(input, init);
+      }),
+    );
   });
 
-  it("should have context in ARI format containing cloudId", () => {
-    // context property contains the cloudId in ARI format
-    const context = installationWebhook.context;
-    expect(context).toBeDefined();
-    expect(context).toMatch(/^ari:cloud:jira::site\/[a-f0-9-]+$/);
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
-  it("should extract cloudId from context ARI", () => {
-    // cloudId is needed for API requests to Jira
-    const context = installationWebhook.context;
-    const match = context.match(/site\/([a-f0-9-]+)$/);
-    expect(match).toBeDefined();
-    expect(match?.[1]).toBe("89a6b224-3b44-4cef-8e4d-37aff29af277");
+  it("stores tenant installation details from a valid Forge installed event", async () => {
+    const response = await postInstallation(installationWebhook);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ success: true });
+
+    expect(fetchJiraServerInfo).toHaveBeenCalledWith(
+      `https://api.atlassian.com/ex/jira/${cloudId}/rest/api/3/serverInfo`,
+      undefined,
+    );
+    expect(saveData).toHaveBeenCalledTimes(1);
+    expect(installations.get(cloudId)).toMatchObject({
+      cloudId,
+      installationId: installationWebhook.installationId,
+      installerAccountId: installationWebhook.installerAccountId,
+      baseUrl,
+    });
+    expect(installations.get(cloudId)?.installedAt).toEqual(expect.any(String));
   });
 
-  it("should have installerAccountId for audit purposes", () => {
-    // Optional but recommended for audit purposes
-    const accountId = installationWebhook.installerAccountId;
-    expect(accountId).toBeDefined();
-    expect(accountId).toMatch(/^\d+:[a-f0-9-]+$/);
+  it("rejects installation requests without a Forge Invocation Token", async () => {
+    const response = await postInstallation(installationWebhook, {
+      authorization: undefined,
+    });
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: "Missing or invalid authorization header",
+    });
+    expect(installations.size).toBe(0);
+    expect(saveData).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid installation context ARIs before fetching Jira server info", async () => {
+    const response = await postInstallation({
+      ...installationWebhook,
+      context: "ari:cloud:jira::site/not-a-uuid",
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Invalid context ARI format",
+    });
+    expect(fetchJiraServerInfo).not.toHaveBeenCalled();
+    expect(installations.size).toBe(0);
+    expect(saveData).not.toHaveBeenCalled();
+  });
+
+  it("returns a predictable failure when Jira server info cannot be resolved", async () => {
+    fetchJiraServerInfo.mockRejectedValueOnce(new Error("network unavailable"));
+
+    const response = await postInstallation(installationWebhook);
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "Failed to process installation",
+    });
+    expect(installations.size).toBe(0);
+    expect(saveData).not.toHaveBeenCalled();
   });
 });

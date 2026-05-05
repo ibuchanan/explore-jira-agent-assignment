@@ -1,6 +1,6 @@
 {
   "name": "explore-jira-agent-assigment",
-  "version": "0.0.0",
+  "version": "0.2.0",
   "private": true,
   "license": "Apache-2.0",
   "scripts": {
@@ -33,9 +33,8 @@
     "forge-ahead": "*"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4",
-    "@types/node": "^25.5",
-    "archunit": "^2.1",
+    "@types/node": "24",
+    "archunit": "^2.3",
     "openapi-typescript": "^7.13",
     "tsx": "^4.21",
     "typescript": "^5.9",

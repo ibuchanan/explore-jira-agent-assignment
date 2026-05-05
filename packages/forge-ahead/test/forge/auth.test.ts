@@ -1,5 +1,5 @@
 import api, { asApp, asUser } from "@forge/api";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getAuthForEvent } from "../../src/forge/auth";
 import type { CommonEvent } from "../../src/forge/function";
 import lifecycle from "../data/event/lifecycle.json";
@@ -9,8 +9,8 @@ import webtrigger from "../data/event/webtrigger.json";
 
 // Mock @forge/api
 vi.mock("@forge/api", () => {
-  const asApp = vi.fn();
-  const asUser = vi.fn();
+  const asApp = vi.fn(() => ({ requestJira: vi.fn() }));
+  const asUser = vi.fn(() => ({ requestJira: vi.fn() }));
   return {
     __esModule: true,
     default: {
@@ -23,27 +23,51 @@ vi.mock("@forge/api", () => {
 });
 
 describe("getAuthForEvent", () => {
-  it("should return asUser(accountId) when installerAccountId is present", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns asUser(accountId) with diagnostics when installerAccountId is present", () => {
     const event: CommonEvent = {
       context: { cloudId: "cloud-1", moduleKey: "mod-1" },
       installerAccountId: "user-123",
     };
 
-    getAuthForEvent(event, api);
+    const result = getAuthForEvent(event, api);
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) throw new Error(result.error.detail);
+    expect(result.value.diagnostics).toEqual({
+      strategy: "asUserAccount",
+      reason: "installerAccountId",
+      accountId: "user-123",
+      context: { cloudId: "cloud-1", moduleKey: "mod-1" },
+    });
     expect(asUser).toHaveBeenCalledWith("user-123");
+    expect(asApp).not.toHaveBeenCalled();
   });
 
-  it("should return asUser(accountId) when upgraderAccountId is present", () => {
+  it("returns asUser(accountId) with diagnostics when upgraderAccountId is present", () => {
     const event: CommonEvent = {
       context: { cloudId: "cloud-1", moduleKey: "mod-1" },
       upgraderAccountId: "user-456",
     };
 
-    getAuthForEvent(event, api);
+    const result = getAuthForEvent(event, api);
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) throw new Error(result.error.detail);
+    expect(result.value.diagnostics).toEqual({
+      strategy: "asUserAccount",
+      reason: "upgraderAccountId",
+      accountId: "user-456",
+      context: { cloudId: "cloud-1", moduleKey: "mod-1" },
+    });
     expect(asUser).toHaveBeenCalledWith("user-456");
+    expect(asApp).not.toHaveBeenCalled();
   });
 
-  it("should return asUser() when context.userAccess.enabled is true", () => {
+  it("returns asUser() with diagnostics when context.userAccess.enabled is true", () => {
     const event: CommonEvent = {
       context: {
         cloudId: "cloud-1",
@@ -52,11 +76,24 @@ describe("getAuthForEvent", () => {
       },
     };
 
-    getAuthForEvent(event, api);
+    const result = getAuthForEvent(event, api);
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) throw new Error(result.error.detail);
+    expect(result.value.diagnostics).toEqual({
+      strategy: "asUserContext",
+      reason: "userAccessEnabled",
+      context: {
+        cloudId: "cloud-1",
+        moduleKey: "mod-1",
+        userAccess: { enabled: true },
+      },
+    });
     expect(asUser).toHaveBeenCalledWith();
+    expect(asApp).not.toHaveBeenCalled();
   });
 
-  it("should return asApp() when no user context is available", () => {
+  it("returns asApp() with diagnostics when no user context is available", () => {
     const event: CommonEvent = {
       context: {
         cloudId: "cloud-1",
@@ -65,33 +102,92 @@ describe("getAuthForEvent", () => {
       },
     };
 
-    getAuthForEvent(event, api);
-    expect(asApp).toHaveBeenCalled();
+    const result = getAuthForEvent(event, api);
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) throw new Error(result.error.detail);
+    expect(result.value.diagnostics).toEqual({
+      strategy: "asApp",
+      reason: "noUserContext",
+      context: {
+        cloudId: "cloud-1",
+        moduleKey: "mod-1",
+        userAccess: { enabled: false },
+      },
+    });
+    expect(asApp).toHaveBeenCalledTimes(1);
+    expect(asUser).not.toHaveBeenCalled();
   });
 
-  it("should return asApp() from webtrigger events", () => {
-    const event = webtrigger;
-    getAuthForEvent(event, api);
-    expect(asApp).toHaveBeenCalled();
+  it("returns asApp() diagnostics from webtrigger events", () => {
+    const result = getAuthForEvent(webtrigger, api);
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) throw new Error(result.error.detail);
+    expect(result.value.diagnostics).toMatchObject({
+      strategy: "asApp",
+      reason: "noUserContext",
+    });
+    expect(asApp).toHaveBeenCalledTimes(1);
+    expect(asUser).not.toHaveBeenCalled();
   });
 
-  it("should return asApp() from scheduled events", () => {
-    const event = scheduled;
-    getAuthForEvent(event, api);
-    expect(asApp).toHaveBeenCalled();
+  it("returns asApp() diagnostics from scheduled events", () => {
+    const result = getAuthForEvent(scheduled, api);
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) throw new Error(result.error.detail);
+    expect(result.value.diagnostics).toMatchObject({
+      strategy: "asApp",
+      reason: "noUserContext",
+    });
+    expect(asApp).toHaveBeenCalledTimes(1);
+    expect(asUser).not.toHaveBeenCalled();
   });
 
-  it("should return asUser(accountId) from lifecycle events", () => {
-    const event = lifecycle;
-    getAuthForEvent(event, api);
+  it("returns asUser(accountId) diagnostics from lifecycle events", () => {
+    const result = getAuthForEvent(lifecycle, api);
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) throw new Error(result.error.detail);
+    expect(result.value.diagnostics).toMatchObject({
+      strategy: "asUserAccount",
+      reason: "installerAccountId",
+      accountId: "557057:3d0e64ae-35d3-490d-b6d9-d81c981476d0",
+    });
     expect(asUser).toHaveBeenCalledWith(
       "557057:3d0e64ae-35d3-490d-b6d9-d81c981476d0",
     );
+    expect(asApp).not.toHaveBeenCalled();
   });
 
-  it("should return asUser() from product events", () => {
-    const event = product;
-    getAuthForEvent(event, api);
-    expect(asUser).toHaveBeenCalled();
+  it("returns asApp() diagnostics from product events without user access", () => {
+    const result = getAuthForEvent(product, api);
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) throw new Error(result.error.detail);
+    expect(result.value.diagnostics).toMatchObject({
+      strategy: "asApp",
+      reason: "noUserContext",
+    });
+    expect(asApp).toHaveBeenCalledTimes(1);
+    expect(asUser).not.toHaveBeenCalled();
+  });
+
+  it("returns a diagnostic error when required event context is missing", () => {
+    const event = { context: { cloudId: "cloud-1" } } as CommonEvent;
+
+    const result = getAuthForEvent(event, api);
+
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) throw new Error("Expected auth selection to fail");
+    expect(result.error).toMatchObject({
+      status: 400,
+      title: "Bad Request",
+      detail:
+        "Forge event context must include cloudId and moduleKey to select an auth strategy",
+    });
+    expect(asApp).not.toHaveBeenCalled();
+    expect(asUser).not.toHaveBeenCalled();
   });
 });

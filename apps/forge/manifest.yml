@@ -23,6 +23,8 @@ modules:
     - key: jira-agent-connector
       name: Jira Agent Assignment
       description: Assigns tasks to AI agents in Jira
+      productContexts:
+        - jira
       protocols:
         agent2Agent:
           jsonRpcTransport:

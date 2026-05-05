@@ -1,6 +1,6 @@
 {
   "name": "forge-ahead",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "An experimental library of tools to make working with Atlassian Forge just a little better.",
   "license": "Apache-2.0",
@@ -44,16 +44,15 @@
   },
   "dependencies": {
     "@forge/api": "^7.1",
-    "jose": "^5.0",
+    "jose": "^6.2",
     "neverthrow": "^8.2",
     "typescript": "^5.9",
     "yaml": "^2.8"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4",
     "@types/node": "24",
     "@vitest/coverage-v8": "^4.0",
-    "archunit": "^2.1",
+    "archunit": "^2.3",
     "tsdown": "^0.21",
     "vitest": "^4.0"
   }
