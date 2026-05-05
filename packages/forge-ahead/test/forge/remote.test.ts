@@ -1,3 +1,15 @@
+/**
+ * Forge Remote invocation token verification tests
+ *
+ * These tests complement the Forge Remote invocation contract by specifying JWT
+ * parsing, JWKS discovery, audience/issuer verification, and Authorization
+ * header handling for Forge Invocation Tokens (FITs).
+ *
+ * @see {@link https://developer.atlassian.com/platform/forge/remote/essentials/#remote-contract|Forge Remote invocation contract}
+ * @see {@link https://developer.atlassian.com/platform/forge/remote/essentials/#the-forge-invocation-token-fit|Forge Invocation Token}
+ * @see {@link https://datatracker.ietf.org/doc/html/rfc7519|RFC 7519 JSON Web Token}
+ */
+
 import { describe, expect, it, vi } from "vitest";
 import {
   createJwksKeyStore,

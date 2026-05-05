@@ -1,3 +1,13 @@
+/**
+ * Forge event log sanitization tests
+ *
+ * These tests complement Forge event documentation by specifying the safe logging
+ * behavior for sensitive invocation fields such as context tokens and headers.
+ *
+ * @see {@link https://developer.atlassian.com/platform/forge/runtime-reference/function-arguments/|Forge function arguments}
+ * @see {@link https://developer.atlassian.com/platform/forge/remote/essentials/#remote-contract|Forge Remote invocation contract}
+ */
+
 import { describe, expect, it } from "vitest";
 import { truncateEvents } from "../../src/forge/logging";
 import scheduled from "../data/event/scheduled.json";

@@ -1,3 +1,13 @@
+/**
+ * Rovo action manifest and type-generation tests
+ *
+ * These tests complement the Rovo action manifest docs by specifying how action
+ * modules are parsed and converted into TypeScript payload interfaces.
+ *
+ * @see {@link https://developer.atlassian.com/platform/forge/manifest-reference/modules/rovo-action/|Rovo action module}
+ * @see {@link https://developer.atlassian.com/platform/forge/manifest-reference/modules/rovo-agent/|Rovo agent module}
+ */
+
 import fs from "node:fs";
 import path from "node:path";
 import * as ts from "typescript";

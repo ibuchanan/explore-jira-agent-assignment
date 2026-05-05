@@ -1,3 +1,13 @@
+/**
+ * Atlassian site context ARI parsing tests
+ *
+ * These tests complement Forge lifecycle/remote docs by specifying how the
+ * library extracts a Cloud ID from site context ARIs delivered by Forge events.
+ *
+ * @see {@link https://developer.atlassian.com/platform/forge/events-reference/life-cycle/|Forge lifecycle events}
+ * @see {@link https://developer.atlassian.com/platform/forge/remote/essentials/#remote-contract|Forge Remote invocation contract}
+ */
+
 import { describe, expect, it } from "vitest";
 import { extractCloudId } from "../../src/cloud/site";
 

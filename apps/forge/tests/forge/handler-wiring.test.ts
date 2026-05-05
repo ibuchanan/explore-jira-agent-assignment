@@ -7,6 +7,7 @@
  *
  * @see {@link https://developer.atlassian.com/platform/forge/manifest-reference/|Manifest reference}
  * @see {@link https://developer.atlassian.com/platform/forge/function-reference/|Function reference}
+ * @see {@link https://developer.atlassian.com/platform/forge/manifest-reference/modules/function/|Function module}
  */
 
 import path from "node:path";

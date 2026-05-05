@@ -1,3 +1,15 @@
+/**
+ * Forge invocation auth selection tests
+ *
+ * These tests specify when helpers should use asUser(accountId), asUser(), or
+ * asApp() based on the event context provided by Forge trigger invocations.
+ *
+ * @see {@link https://developer.atlassian.com/platform/forge/apis-reference/fetch-api-product.requestjira/|Product fetch API and authorization}
+ * @see {@link https://developer.atlassian.com/platform/forge/events-reference/life-cycle/|Lifecycle event payloads}
+ * @see {@link https://developer.atlassian.com/platform/forge/events-reference/scheduled-trigger/|Scheduled trigger event payloads}
+ * @see {@link https://developer.atlassian.com/platform/forge/events-reference/web-trigger/|Web trigger event payloads}
+ */
+
 import api, { asApp, asUser } from "@forge/api";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getAuthForEvent } from "../../src/forge/auth";

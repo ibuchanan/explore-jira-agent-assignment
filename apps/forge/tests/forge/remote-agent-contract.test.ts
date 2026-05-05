@@ -5,6 +5,11 @@
  * sample: Jira reaches the agent through a rovo:agentConnector using a declared
  * JSON-RPC endpoint, and installation lifecycle events are delivered directly to
  * a Forge Remote endpoint.
+ *
+ * @see {@link https://developer.atlassian.com/platform/forge/remote-agents-in-jira/|Integrate remote agents with Jira}
+ * @see {@link https://developer.atlassian.com/platform/forge/manifest-reference/modules/rovo-agent-connector/|Rovo agent connector module}
+ * @see {@link https://developer.atlassian.com/platform/forge/remote/essentials/#remote-contract|Forge Remote invocation contract}
+ * @see {@link https://developer.atlassian.com/platform/forge/manifest-reference/modules/endpoint/|Endpoint module}
  */
 
 import { describe, expect, it } from "vitest";

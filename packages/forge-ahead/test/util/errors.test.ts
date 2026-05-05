@@ -1,3 +1,13 @@
+/**
+ * Problem Details and standard error helper tests
+ *
+ * These tests specify the library's RFC 9457 Problem Details response shape and
+ * shell exit-code mapping used by Forge and remote-agent helpers.
+ *
+ * @see {@link https://datatracker.ietf.org/doc/html/rfc9457|RFC 9457 Problem Details for HTTP APIs}
+ * @see {@link https://nodejs.org/api/process.html#exit-codes|Node.js process exit codes}
+ */
+
 import { afterEach, describe, expect, it } from "vitest";
 import {
   type ProblemDetails,

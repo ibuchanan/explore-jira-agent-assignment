@@ -11,6 +11,7 @@
  * @see {@link https://developer.atlassian.com/platform/forge/runtime-reference/product-fetch-api/|Product fetch API}
  * @see {@link https://developer.atlassian.com/platform/forge/add-scopes-to-call-an-atlassian-rest-api/|Add scopes}
  * @see {@link https://developer.atlassian.com/platform/forge/runtime-reference/storage-api-custom-entities/|Hosted storage overview}
+ * @see {@link https://developer.atlassian.com/platform/forge/manifest-reference/permissions/|Manifest permissions and scopes}
  */
 
 import * as fs from "node:fs";

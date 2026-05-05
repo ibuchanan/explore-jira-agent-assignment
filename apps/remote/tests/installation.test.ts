@@ -1,3 +1,14 @@
+/**
+ * Forge Remote installation lifecycle endpoint tests
+ *
+ * These tests complement the lifecycle and remote invocation docs by specifying
+ * how the sample backend verifies Forge Invocation Tokens, extracts the site
+ * context ARI, resolves Jira server information, and stores installation data.
+ *
+ * @see {@link https://developer.atlassian.com/platform/forge/events-reference/life-cycle/|Forge lifecycle events}
+ * @see {@link https://developer.atlassian.com/platform/forge/remote/essentials/#remote-contract|Forge Remote invocation contract}
+ */
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import installationWebhook from "./data/installation-webhook.json";
 

@@ -1,3 +1,14 @@
+/**
+ * A2A JSON-RPC remote-agent contract tests
+ *
+ * These tests complement the remote-agent docs by exercising the HTTP JSON-RPC
+ * envelopes Jira sends to a remote agent backend and the Task response shapes
+ * Jira expects when polling or canceling work.
+ *
+ * @see {@link https://developer.atlassian.com/platform/forge/remote-agents-in-jira/|Integrate remote agents with Jira}
+ * @see {@link https://www.jsonrpc.org/specification|JSON-RPC 2.0 Specification}
+ */
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import messageSendParams from "./data/message-send-params.json";
 

@@ -1,3 +1,13 @@
+/**
+ * JSON-RPC 2.0 utility tests
+ *
+ * These tests complement the JSON-RPC 2.0 specification by documenting the
+ * request validation and success/error response envelope helpers used by the
+ * remote-agent protocol implementation.
+ *
+ * @see {@link https://www.jsonrpc.org/specification|JSON-RPC 2.0 Specification}
+ */
+
 import { describe, expect, it } from "vitest";
 import {
   type JsonRpcRequest,

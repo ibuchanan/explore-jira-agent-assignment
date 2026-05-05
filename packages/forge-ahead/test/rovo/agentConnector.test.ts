@@ -1,3 +1,15 @@
+/**
+ * Rovo remote agent connector protocol tests
+ *
+ * These tests complement the remote-agent docs by specifying A2A task states,
+ * JSON-RPC request/response shapes, task formatting, and the tasks/get taskId
+ * contract that Jira uses when polling a remote agent.
+ *
+ * @see {@link https://developer.atlassian.com/platform/forge/remote-agents-in-jira/|Integrate remote agents with Jira}
+ * @see {@link https://developer.atlassian.com/platform/forge/manifest-reference/modules/rovo-agent-connector/|Rovo agent connector module}
+ * @see {@link https://www.jsonrpc.org/specification|JSON-RPC 2.0 Specification}
+ */
+
 import { describe, expect, it } from "vitest";
 import type {
   JsonRpcRequest,

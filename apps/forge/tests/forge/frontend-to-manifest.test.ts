@@ -11,6 +11,7 @@
  * @see {@link https://developer.atlassian.com/platform/forge/manifest-reference/|Manifest reference}
  * @see {@link https://developer.atlassian.com/platform/forge/apis-reference/ui-api-bridge/invoke/|Forge bridge invoke}
  * @see {@link https://developer.atlassian.com/platform/forge/runtime-reference/forge-resolver/|Forge resolver}
+ * @see {@link https://developer.atlassian.com/platform/forge/manifest-reference/modules/endpoint/|Endpoint module}
  */
 
 import { join } from "node:path";

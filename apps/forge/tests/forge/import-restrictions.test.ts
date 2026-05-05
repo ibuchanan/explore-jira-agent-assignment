@@ -9,6 +9,7 @@
  * @see {@link https://developer.atlassian.com/platform/forge/ui-kit/overview/|Forge UI Kit overview}
  * @see {@link https://developer.atlassian.com/platform/forge/ui-kit-2/compare/|Migration and comparison guidance}
  * @see {@link https://developer.atlassian.com/platform/forge/runtime-reference/storage-api/|Legacy storage API}
+ * @see {@link https://developer.atlassian.com/platform/forge/runtime-reference/storage-api-custom-entities/|Hosted storage and KVS}
  */
 
 import * as path from "node:path";

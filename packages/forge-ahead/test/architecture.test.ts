@@ -1,3 +1,14 @@
+/**
+ * forge-ahead package architecture tests
+ *
+ * These tests document package-level design constraints that keep generic utility
+ * modules independent from Forge-specific modules and keep the source graph
+ * acyclic for maintainable public API evolution.
+ *
+ * @see {@link https://developer.atlassian.com/platform/forge/|Forge developer platform}
+ * @see {@link https://github.com/archunit-ts/archunit|ArchUnitTS}
+ */
+
 import { projectFiles } from "archunit";
 import { describe, expect, it } from "vitest";
 

@@ -1,3 +1,13 @@
+/**
+ * Forge web trigger helper tests
+ *
+ * These tests complement the web trigger docs by specifying event header
+ * extraction and response envelope behavior for web trigger handlers.
+ *
+ * @see {@link https://developer.atlassian.com/platform/forge/manifest-reference/modules/web-trigger/|Web trigger module}
+ * @see {@link https://developer.atlassian.com/platform/forge/events-reference/web-trigger/|Web trigger event payload}
+ */
+
 import type { WebTriggerMethod } from "@forge/api";
 import { describe, expect, it } from "vitest";
 import type {
