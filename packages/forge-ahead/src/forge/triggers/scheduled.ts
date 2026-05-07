@@ -1,3 +1,6 @@
+// fallow-ignore-file unused-file
+// Placeholder handler for Forge scheduled triggers.
+// Not yet wired into index.ts; kept as a starting point for future trigger support.
 import type { CommonEvent, InstallContext } from "../function";
 
 export type ScheduledEvent = CommonEvent;

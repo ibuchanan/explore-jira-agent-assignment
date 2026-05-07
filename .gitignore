@@ -272,3 +272,4 @@ package-lock.json
 
 ## Need some storage for a better dev loop
 database/
+.fallow/

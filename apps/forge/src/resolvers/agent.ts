@@ -172,25 +172,107 @@ async function handleCancelTask(
 }
 
 /**
+ * Resolve a Result<Task> into a JSON-RPC response object.
+ * On success returns the task; on error maps the ProblemDetails status to a
+ * JSON-RPC error code using the provided lookup table (falls back to -32603).
+ */
+function toJsonRpcResponse(
+  id: JsonRpcRequest["id"],
+  result: Result<Task, ProblemDetails>,
+  errorMap: Record<number, { code: number; message: string }> = {},
+  logLabel?: string,
+): JsonRpcResponse {
+  if (result.isOk()) {
+    return createSuccessResponse(id, result.value);
+  }
+  if (logLabel) console.error(`${logLabel} error:`, result.error);
+  const { code, message } =
+    errorMap[result.error.status] ?? DEFAULT_JSONRPC_ERROR;
+  return createErrorResponse(id, code, message, { detail: result.error.detail });
+}
+
+/**
+ * Validate params and dispatch a single JSON-RPC method to its handler.
+ * Returns a JsonRpcResponse (success or structured error) for every case.
+ */
+async function dispatchMethod(
+  req: JsonRpcRequest,
+  fwd: ForwardContext,
+): Promise<JsonRpcResponse> {
+  const { id, method } = req;
+
+  switch (method) {
+    case "message/send": {
+      const params = req.params as unknown as SendMessageParams;
+      if (
+        !params?.message ||
+        !Array.isArray(params.message.parts) ||
+        params.message.parts.length === 0
+      ) {
+        return createErrorResponse(
+          id,
+          -32602,
+          "Invalid params: message with non-empty parts is required",
+        );
+      }
+      return toJsonRpcResponse(
+        id,
+        await handleSendMessage(params, fwd),
+        {},
+        "SendMessage",
+      );
+    }
+
+    case "tasks/get": {
+      const params = req.params as unknown as GetTaskParams;
+      const taskId = params?.id ?? params?.taskId;
+      if (!taskId || typeof taskId !== "string") {
+        return createErrorResponse(id, -32602, "Invalid params: taskId is required");
+      }
+      return toJsonRpcResponse(
+        id,
+        await handleGetTask({ ...params, taskId }, fwd),
+        HTTP_TO_JSONRPC,
+        "GetTask",
+      );
+    }
+
+    case "tasks/cancel": {
+      const params = req.params as unknown as CancelTaskParams;
+      const taskId = params?.id ?? params?.taskId;
+      if (!taskId || typeof taskId !== "string") {
+        return createErrorResponse(id, -32602, "Invalid params: taskId is required");
+      }
+      return toJsonRpcResponse(
+        id,
+        await handleCancelTask({ ...params, taskId }, fwd),
+        HTTP_TO_JSONRPC,
+        "CancelTask",
+      );
+    }
+
+    default:
+      return createErrorResponse(id, -32601, "Method not found");
+  }
+}
+
+/**
  * Main JSON-RPC handler
- * Routes requests to appropriate method handlers
+ * Parses and validates the request, then delegates to dispatchMethod.
  *
  * @param request - Incoming HTTP request with JSON-RPC payload
  * @param context - Forge invocation context with auth tokens
- * @returns JSON-RPC response
+ * @returns HTTP Response containing a JSON-RPC 2.0 envelope
  */
 export async function handleJsonRpc(
   request: Request,
-  context?: {
-    headers?: Record<string, string>;
-  },
+  context?: { headers?: Record<string, string> },
 ): Promise<Response> {
   try {
-    // Extract tokens from headers if provided
     const systemToken = context?.headers?.["x-forge-oauth-system"];
     const userToken = context?.headers?.["x-forge-oauth-user"];
 
-    // Validate FIT if present
+    // Validate Forge Invocation Token when present
     if (context?.headers?.authorization) {
       const result = await validateAuthHeader(context.headers.authorization);
       if (result.isErr()) {
@@ -200,142 +282,24 @@ export async function handleJsonRpc(
           headers: { "Content-Type": "application/problem+json" },
         });
       }
-      // Token is valid, payload available at result.value if needed
       console.debug("Token validated successfully for app:", result.value.aud);
     }
 
-    // Parse request body
+    // Parse body
     let body: unknown;
     try {
       body = await request.json();
-    } catch (_error) {
-      return new Response(
-        JSON.stringify({
-          jsonrpc: "2.0",
-          error: {
-            code: -32700,
-            message: "Parse error",
-          },
-        }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
-      );
+    } catch {
+      return jsonRpcErrorResponse(400, -32700, "Parse error");
     }
 
-    // Validate JSON-RPC structure
+    // Validate JSON-RPC envelope
     if (!validateJsonRpcRequest(body)) {
-      return new Response(
-        JSON.stringify({
-          jsonrpc: "2.0",
-          error: {
-            code: -32600,
-            message: "Invalid Request",
-          },
-        }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
-      );
+      return jsonRpcErrorResponse(400, -32600, "Invalid Request");
     }
 
     const jsonRpcRequest = body as JsonRpcRequest;
-    let response: JsonRpcResponse;
-
-    // Route to appropriate handler
-    switch (jsonRpcRequest.method) {
-      case "message/send": {
-        const params = jsonRpcRequest.params as unknown as SendMessageParams;
-        // Validate required params before forwarding
-        if (
-          !params?.message ||
-          !Array.isArray(params.message.parts) ||
-          params.message.parts.length === 0
-        ) {
-          response = createErrorResponse(
-            jsonRpcRequest.id,
-            -32602,
-            "Invalid params: message with non-empty parts is required",
-          );
-          break;
-        }
-        const result = await handleSendMessage(params, {
-          systemToken,
-          userToken,
-        });
-        if (result.isOk()) {
-          response = createSuccessResponse(jsonRpcRequest.id, result.value);
-        } else {
-          console.error("SendMessage error:", result.error);
-          const { code, message } = DEFAULT_JSONRPC_ERROR;
-          response = createErrorResponse(jsonRpcRequest.id, code, message, {
-            detail: result.error.detail,
-          });
-        }
-        break;
-      }
-
-      case "tasks/get": {
-        const params = jsonRpcRequest.params as unknown as GetTaskParams;
-        // Jira sends 'id'; the A2A spec documents 'taskId' — accept either
-        const taskId = params?.id ?? params?.taskId;
-        if (!taskId || typeof taskId !== "string") {
-          response = createErrorResponse(
-            jsonRpcRequest.id,
-            -32602,
-            "Invalid params: taskId is required",
-          );
-          break;
-        }
-        const result = await handleGetTask(
-          { ...params, taskId },
-          { systemToken, userToken },
-        );
-        if (result.isOk()) {
-          response = createSuccessResponse(jsonRpcRequest.id, result.value);
-        } else {
-          console.error("GetTask error:", result.error);
-          const { code, message } =
-            HTTP_TO_JSONRPC[result.error.status] ?? DEFAULT_JSONRPC_ERROR;
-          response = createErrorResponse(jsonRpcRequest.id, code, message, {
-            detail: result.error.detail,
-          });
-        }
-        break;
-      }
-
-      case "tasks/cancel": {
-        const params = jsonRpcRequest.params as unknown as CancelTaskParams;
-        // Jira sends 'id'; the A2A spec documents 'taskId' — accept either
-        const taskId = params?.id ?? params?.taskId;
-        if (!taskId || typeof taskId !== "string") {
-          response = createErrorResponse(
-            jsonRpcRequest.id,
-            -32602,
-            "Invalid params: taskId is required",
-          );
-          break;
-        }
-        const result = await handleCancelTask(
-          { ...params, taskId },
-          { systemToken, userToken },
-        );
-        if (result.isOk()) {
-          response = createSuccessResponse(jsonRpcRequest.id, result.value);
-        } else {
-          console.error("CancelTask error:", result.error);
-          const { code, message } =
-            HTTP_TO_JSONRPC[result.error.status] ?? DEFAULT_JSONRPC_ERROR;
-          response = createErrorResponse(jsonRpcRequest.id, code, message, {
-            detail: result.error.detail,
-          });
-        }
-        break;
-      }
-
-      default:
-        response = createErrorResponse(
-          jsonRpcRequest.id,
-          -32601,
-          "Method not found",
-        );
-    }
+    const response = await dispatchMethod(jsonRpcRequest, { systemToken, userToken });
 
     return new Response(JSON.stringify(response), {
       status: 200,
@@ -343,15 +307,18 @@ export async function handleJsonRpc(
     });
   } catch (error) {
     console.error("Unexpected error in handleJsonRpc:", error);
-    return new Response(
-      JSON.stringify({
-        jsonrpc: "2.0",
-        error: {
-          code: -32603,
-          message: "Internal error",
-        },
-      }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
-    );
+    return jsonRpcErrorResponse(500, -32603, "Internal error");
   }
+}
+
+/** Build a plain HTTP Response wrapping a JSON-RPC error envelope. */
+function jsonRpcErrorResponse(
+  status: number,
+  code: number,
+  message: string,
+): Response {
+  return new Response(
+    JSON.stringify({ jsonrpc: "2.0", error: { code, message } }),
+    { status, headers: { "Content-Type": "application/json" } },
+  );
 }

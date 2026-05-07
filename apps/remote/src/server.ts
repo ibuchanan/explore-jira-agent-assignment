@@ -79,6 +79,104 @@ function prefixAgentMessage(message: string): string {
 }
 
 // ============================================================================
+// Message Context Helpers
+// ============================================================================
+
+/**
+ * The parsed fields extracted from an incoming A2A message.
+ */
+interface MessageContext {
+  contextId: string;
+  workItemId: string | undefined;
+  userAccountId: string | undefined;
+  context: AgentContext;
+}
+
+/**
+ * Parse an incoming A2A message payload, resolve (or create) the associated
+ * AgentContext, and record the user's text parts in the context history.
+ *
+ * This logic is shared between the polling handler (handleMessageSend) and
+ * the streaming handler (handleSendStreamingMessage) — extracting it here
+ * eliminates the duplication between those two functions.
+ *
+ * @throws {Error} if the context cannot be found after creation (should never happen)
+ */
+/**
+ * Scan a message's parts for the first data part and extract work item / user
+ * identity fields from it. Returns undefined for any field not present.
+ */
+function extractDataFields(parts: unknown[]): {
+  workItemId: string | undefined;
+  userAccountId: string | undefined;
+} {
+  for (const part of parts) {
+    if (
+      (part as { kind: string }).kind === "data" &&
+      (part as { data?: unknown }).data
+    ) {
+      const data = (part as { data: Record<string, unknown> }).data;
+      return {
+        // Accept nested `issue.id`, flat `issueId`, or flat `workItemId`
+        workItemId:
+          (data.issue as { id?: string })?.id ||
+          (data.issueId as string) ||
+          (data.workItemId as string),
+        userAccountId: data.userAccountId as string,
+      };
+    }
+  }
+  return { workItemId: undefined, userAccountId: undefined };
+}
+
+/**
+ * Append each text part in `parts` to `context.messages` as a user turn.
+ */
+function recordUserMessages(parts: unknown[], context: AgentContext): void {
+  for (const part of parts) {
+    if (
+      (part as { kind: string }).kind === "text" &&
+      (part as { text?: string }).text
+    ) {
+      context.messages.push({
+        role: "user",
+        text: (part as { text: string }).text,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+}
+
+function resolveMessageContext(
+  rawMessage: { contextId?: string; parts: unknown[] },
+  cloudId: string | undefined,
+): MessageContext {
+  const contextId = rawMessage.contextId || generateId("ctx");
+  const { workItemId, userAccountId } = extractDataFields(rawMessage.parts);
+
+  // Create context if this is a new conversation
+  if (!contexts.has(contextId)) {
+    contexts.set(contextId, {
+      id: contextId,
+      userAccountId: userAccountId || "unknown",
+      workItemId,
+      cloudId: cloudId || "unknown",
+      createdAt: new Date().toISOString(),
+      messages: [],
+    });
+  }
+
+  const context = contexts.get(contextId);
+  if (!context) {
+    throw new Error("Context not found");
+  }
+
+  recordUserMessages(rawMessage.parts, context);
+
+  return { contextId, workItemId, userAccountId, context };
+}
+
+// ============================================================================
 // JSON-RPC Method Definitions
 // ============================================================================
 
@@ -113,58 +211,10 @@ async function handleMessageSend({
   const { message } = params as {
     message: { contextId?: string; parts: unknown[] };
   };
-  const contextId = message.contextId || generateId("ctx");
   const taskId = generateId("task");
 
-  // Extract work item and user info from message data
-  let workItemId: string | undefined;
-  let userAccountId: string | undefined;
-
-  for (const part of message.parts) {
-    if (
-      (part as { kind: string }).kind === "data" &&
-      (part as { data?: unknown }).data
-    ) {
-      const data = (part as { data: Record<string, unknown> }).data;
-      // Extract issue ID from the nested structure
-      workItemId =
-        (data.issue as { id?: string })?.id ||
-        (data.issueId as string) ||
-        (data.workItemId as string);
-      userAccountId = data.userAccountId as string;
-    }
-  }
-
-  // Create or update context
-  if (!contexts.has(contextId)) {
-    contexts.set(contextId, {
-      id: contextId,
-      userAccountId: userAccountId || "unknown",
-      workItemId,
-      cloudId: cloudId || "unknown",
-      createdAt: new Date().toISOString(),
-      messages: [],
-    });
-  }
-
-  const context = contexts.get(contextId);
-  if (!context) {
-    throw new Error("Context not found");
-  }
-
-  // Add user message to context
-  for (const part of message.parts) {
-    if (
-      (part as { kind: string }).kind === "text" &&
-      (part as { text?: string }).text
-    ) {
-      context.messages.push({
-        role: "user",
-        text: (part as { text: string }).text,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  }
+  const { contextId, workItemId, userAccountId, context } =
+    resolveMessageContext(message, cloudId);
 
   // Create initial task in submitted state
   const baseInitialMessage = workItemId
@@ -433,53 +483,10 @@ async function handleSendStreamingMessage(
   const { message } = params as {
     message: { contextId?: string; parts: unknown[] };
   };
-  const contextId = message.contextId || generateId("ctx");
   const taskId = generateId("task");
 
-  // Extract work item and user info from message data
-  let workItemId: string | undefined;
-  let userAccountId: string | undefined;
-  for (const part of message.parts) {
-    if (
-      (part as { kind: string }).kind === "data" &&
-      (part as { data?: unknown }).data
-    ) {
-      const data = (part as { data: Record<string, unknown> }).data;
-      workItemId =
-        (data.issue as { id?: string })?.id ||
-        (data.issueId as string) ||
-        (data.workItemId as string);
-      userAccountId = data.userAccountId as string;
-    }
-  }
-
-  // Create or update context
-  if (!contexts.has(contextId)) {
-    contexts.set(contextId, {
-      id: contextId,
-      userAccountId: userAccountId || "unknown",
-      workItemId,
-      cloudId: cloudId || "unknown",
-      createdAt: new Date().toISOString(),
-      messages: [],
-    });
-  }
-
-  const context = contexts.get(contextId)!;
-
-  // Add user message to context
-  for (const part of message.parts) {
-    if (
-      (part as { kind: string }).kind === "text" &&
-      (part as { text?: string }).text
-    ) {
-      context.messages.push({
-        role: "user",
-        text: (part as { text: string }).text,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  }
+  const { contextId, workItemId, userAccountId, context } =
+    resolveMessageContext(message, cloudId);
 
   // Create task in working state immediately
   const now = new Date().toISOString();
@@ -659,134 +666,79 @@ app.post("/atlassian/installed", authMiddleware, async (req, res) => {
 // Route: A2A JSON-RPC Endpoint
 // ============================================================================
 
-app.post(
-  "/a2a/json-rpc",
-  authMiddleware,
-  async (req: AuthenticatedRequest, res) => {
-    const _systemToken = req.headers["x-forge-oauth-system"] as string;
-    const _userToken = req.headers["x-forge-oauth-user"] as string;
+/**
+ * Handle a POST /a2a/json-rpc request.
+ *
+ * Detects whether Jira wants an SSE streaming response (Accept: text/event-stream)
+ * and routes to the appropriate handler:
+ *   - Streaming message/send  → handleSendStreamingMessage (SSE)
+ *   - tasks/resubscribe       → handleTasksResubscribe (SSE)
+ *   - All other methods       → methodHandlers map (JSON)
+ */
+async function handleA2aJsonRpc(
+  req: AuthenticatedRequest,
+  res: import("express").Response,
+): Promise<void> {
+  const cloudId = req.fitPayload?.context?.cloudId;
+  if (!cloudId) {
+    console.warn("Could not extract cloudId from FIT payload", {
+      hasPayload: !!req.fitPayload,
+      hasContext: !!req.fitPayload?.context,
+    });
+  }
 
-    // Extract cloudId from validated FIT payload
-    const cloudId = req.fitPayload?.context?.cloudId;
+  const { jsonrpc, id, method, params } = req.body;
 
-    if (!cloudId) {
-      console.warn("Could not extract cloudId from FIT payload", {
-        hasPayload: !!req.fitPayload,
-        hasContext: !!req.fitPayload?.context,
-        context: req.fitPayload?.context,
-      });
+  if (jsonrpc !== "2.0") {
+    res.status(400).json({ jsonrpc: "2.0", id, error: { code: -32600, message: "Invalid Request" } });
+    return;
+  }
+
+  console.log(`JSON-RPC ${method} called:`, JSON.stringify({ id, params }, null, 2));
+
+  const wantsStream = (req.headers["accept"] ?? "").includes("text/event-stream");
+
+  try {
+    if (method === JSON_RPC_METHODS.MESSAGE_SEND && wantsStream) {
+      await handleSendStreamingMessage(req, res, params as Record<string, unknown>, String(id), cloudId);
+      return;
     }
 
-    const { jsonrpc, id, method, params } = req.body;
-
-    if (jsonrpc !== "2.0") {
-      const errorResponse = {
-        jsonrpc: "2.0",
-        id,
-        error: { code: -32600, message: "Invalid Request" },
-      };
-      console.error("JSON-RPC invalid request:", errorResponse);
-      return res.status(400).json(errorResponse);
+    if (method === JSON_RPC_METHODS.TASKS_RESUBSCRIBE) {
+      await handleTasksResubscribe(res, params as Record<string, unknown>, String(id));
+      return;
     }
 
-    console.log(
-      `JSON-RPC ${method} called:`,
-      JSON.stringify({ id, params }, null, 2),
-    );
-
-    // Detect whether Jira wants an SSE streaming response
-    const acceptHeader = req.headers["accept"] || req.headers["Accept"] || "";
-    const wantsStream = acceptHeader.includes("text/event-stream");
-
-    try {
-      // -----------------------------------------------------------------------
-      // Streaming path: message/send with Accept: text/event-stream
-      // -----------------------------------------------------------------------
-      if (
-        method === JSON_RPC_METHODS.MESSAGE_SEND &&
-        wantsStream
-      ) {
-        console.log("JSON-RPC message/send (streaming) called");
-        await handleSendStreamingMessage(
-          req,
-          res,
-          params as Record<string, unknown>,
-          String(id),
-          cloudId,
-        );
-        return;
-      }
-
-      // -----------------------------------------------------------------------
-      // Resubscribe path: tasks/resubscribe (always SSE)
-      // -----------------------------------------------------------------------
-      if (method === JSON_RPC_METHODS.TASKS_RESUBSCRIBE) {
-        console.log("JSON-RPC tasks/resubscribe called");
-        await handleTasksResubscribe(
-          res,
-          params as Record<string, unknown>,
-          String(id),
-        );
-        return;
-      }
-
-      // -----------------------------------------------------------------------
-      // Standard JSON path: all other methods
-      // -----------------------------------------------------------------------
-      const handler = methodHandlers[method as JsonRpcMethod];
-
-      if (!handler) {
-        const errorResponse = {
-          jsonrpc: "2.0",
-          id,
-          error: { code: -32601, message: "Method not found" },
-        };
-        console.error("JSON-RPC unknown method:", { method, errorResponse });
-        return res.json(errorResponse);
-      }
-
-      const result = await handler({ params, id, cloudId });
-      const successResponse = {
-        jsonrpc: "2.0",
-        id,
-        result,
-      };
-
-      if (method === JSON_RPC_METHODS.MESSAGE_SEND) {
-        console.log("JSON-RPC message/send response:");
-        console.log(JSON.stringify(successResponse, null, 2));
-      }
-
-      if (method === JSON_RPC_METHODS.TASKS_GET) {
-        console.log("JSON-RPC tasks/get response (full):");
-        console.log(JSON.stringify(successResponse, null, 2));
-      }
-
-      return res.json(successResponse);
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      const errorCode = JSON_RPC_ERROR_CODES.get(errorMessage) ?? -32603;
-
-      const errorResponse = {
-        jsonrpc: "2.0",
-        id,
-        error: {
-          code: errorCode,
-          message: errorMessage,
-        },
-      };
-
-      console.error("JSON-RPC error:", {
-        method,
-        error: errorMessage,
-        stack: error instanceof Error ? error.stack : undefined,
-      });
-
-      return res.json(errorResponse);
+    const handler = methodHandlers[method as JsonRpcMethod];
+    if (!handler) {
+      res.json({ jsonrpc: "2.0", id, error: { code: -32601, message: "Method not found" } });
+      return;
     }
-  },
-);
+
+    const result = await handler({ params, id, cloudId });
+    const successResponse = { jsonrpc: "2.0", id, result };
+
+    if (method === JSON_RPC_METHODS.MESSAGE_SEND) {
+      console.log("JSON-RPC message/send response:", JSON.stringify(successResponse, null, 2));
+    }
+    if (method === JSON_RPC_METHODS.TASKS_GET) {
+      console.log("JSON-RPC tasks/get response (full):", JSON.stringify(successResponse, null, 2));
+    }
+
+    res.json(successResponse);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorCode = JSON_RPC_ERROR_CODES.get(errorMessage) ?? -32603;
+    console.error("JSON-RPC error:", {
+      method,
+      error: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    res.json({ jsonrpc: "2.0", id, error: { code: errorCode, message: errorMessage } });
+  }
+}
+
+app.post("/a2a/json-rpc", authMiddleware, handleA2aJsonRpc);
 
 // ============================================================================
 // Route: Configuration (Optional)
