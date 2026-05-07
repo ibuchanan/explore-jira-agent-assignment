@@ -29,6 +29,7 @@ modules:
         agent2Agent:
           jsonRpcTransport:
             endpoint: a2a-json-rpc-endpoint
+            streaming: true
   trigger:
     - key: installation-trigger
       endpoint: atlassian-installed-endpoint
@@ -43,7 +44,11 @@ remotes:
   - key: backend-service
     baseUrl: ${REMOTE_SERVICE_URL}
     operations:
+      # compute: required for invokeRemote to work (task traffic, SSE streaming)
       - compute
+      # storage: declares that end-user data (issue IDs, account IDs, cloud IDs)
+      # is egressed to and stored on this remote backend, for data-residency
+      # accounting. This refers to the remote's own database, NOT Forge Storage.
       - storage
     storage:
       inScopeEUD: true

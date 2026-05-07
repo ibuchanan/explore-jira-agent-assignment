@@ -102,7 +102,7 @@ describe("Remote agent manifest contract", () => {
 
     const transport = connector.protocols?.agent2Agent?.jsonRpcTransport;
     expect(transport).toMatchObject({ endpoint: "a2a-json-rpc-endpoint" });
-    expect(transport?.streaming ?? false).toBe(false);
+    expect(transport?.streaming ?? false).toBe(true);
     expect(endpointByKey(manifest).has(transport?.endpoint ?? "")).toBe(true);
   });
 

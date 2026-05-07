@@ -138,6 +138,30 @@ remotes:
         enabled: true
 ```
 
+#### Why Forge Remote is required, not optional
+
+The [Jira remote agents architecture][remote-agents-guide] is built around the premise that
+the agent's compute runs **outside** Atlassian infrastructure — on your own servers, cloud
+functions, or AI platform. Forge Remote is the mechanism that bridges that external service
+into the Forge security model. It is not a design choice or a trade-off to re-evaluate; it
+is a structural requirement of the remote agents pattern:
+
+- **Long-lived connections** — SSE streaming (`streaming: true`) requires an open HTTP
+  connection for seconds to minutes. Forge functions time out in seconds and cannot hold
+  open connections. The remote backend holds the connection; Forge proxies through it.
+- **Your compute, your LLM** — The agent's intelligence lives in `apps/remote` (or your
+  production equivalent). Forge's role is limited to authenticating the request, forwarding
+  it, and relaying the response. None of the agent logic runs inside Forge.
+- **FIT authentication** — Jira attaches a Forge Invocation Token (FIT) to every request.
+  Declaring the backend under `remotes:` is what tells Forge to issue and attach that token,
+  so your backend can verify the request is genuinely from Jira and not a third party.
+
+If you want compute to run inside Forge (i.e., to qualify for **Runs on Atlassian**),
+you would need to implement the agent logic entirely in a Forge function — which is a
+different architecture and not "remote agents".
+
+---
+
 `REMOTE_SERVICE_URL` must point at the public HTTPS base URL for
 `apps/remote` or another compatible remote backend. 
 The remote must be configured as a Forge remote 

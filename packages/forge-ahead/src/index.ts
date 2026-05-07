@@ -61,9 +61,12 @@ export type {
   GetTaskParams,
   Message,
   MessagePart,
+  ResubscribeTaskParams,
   SendMessageParams,
+  StreamResponse,
   Task,
   TaskState,
+  TaskStatusUpdateEvent,
 } from "./rovo/agentConnector";
 
 // Re-export Agent2Agent (A2A) protocol utilities
@@ -88,6 +91,7 @@ export type {
   CancelTaskParams as AgentConnectorCancelTaskParams,
   GetTaskParams as AgentConnectorGetTaskParams,
   JiraInstallation,
+  ResubscribeTaskParams as AgentConnectorResubscribeTaskParams,
   SendMessageParams as AgentConnectorSendMessageParams,
 } from "./rovo/agentConnector";
 

@@ -242,6 +242,19 @@ export async function handleJsonRpc(
     switch (jsonRpcRequest.method) {
       case "message/send": {
         const params = jsonRpcRequest.params as unknown as SendMessageParams;
+        // Validate required params before forwarding
+        if (
+          !params?.message ||
+          !Array.isArray(params.message.parts) ||
+          params.message.parts.length === 0
+        ) {
+          response = createErrorResponse(
+            jsonRpcRequest.id,
+            -32602,
+            "Invalid params: message with non-empty parts is required",
+          );
+          break;
+        }
         const result = await handleSendMessage(params, {
           systemToken,
           userToken,
@@ -260,7 +273,20 @@ export async function handleJsonRpc(
 
       case "tasks/get": {
         const params = jsonRpcRequest.params as unknown as GetTaskParams;
-        const result = await handleGetTask(params, { systemToken, userToken });
+        // Jira sends 'id'; the A2A spec documents 'taskId' — accept either
+        const taskId = params?.id ?? params?.taskId;
+        if (!taskId || typeof taskId !== "string") {
+          response = createErrorResponse(
+            jsonRpcRequest.id,
+            -32602,
+            "Invalid params: taskId is required",
+          );
+          break;
+        }
+        const result = await handleGetTask(
+          { ...params, taskId },
+          { systemToken, userToken },
+        );
         if (result.isOk()) {
           response = createSuccessResponse(jsonRpcRequest.id, result.value);
         } else {
@@ -276,10 +302,20 @@ export async function handleJsonRpc(
 
       case "tasks/cancel": {
         const params = jsonRpcRequest.params as unknown as CancelTaskParams;
-        const result = await handleCancelTask(params, {
-          systemToken,
-          userToken,
-        });
+        // Jira sends 'id'; the A2A spec documents 'taskId' — accept either
+        const taskId = params?.id ?? params?.taskId;
+        if (!taskId || typeof taskId !== "string") {
+          response = createErrorResponse(
+            jsonRpcRequest.id,
+            -32602,
+            "Invalid params: taskId is required",
+          );
+          break;
+        }
+        const result = await handleCancelTask(
+          { ...params, taskId },
+          { systemToken, userToken },
+        );
         if (result.isOk()) {
           response = createSuccessResponse(jsonRpcRequest.id, result.value);
         } else {

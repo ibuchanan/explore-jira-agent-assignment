@@ -170,14 +170,63 @@ export interface CancelTaskParams {
 }
 
 /**
+ * A status update event emitted during SSE streaming.
+ * Communicates changes in the task's lifecycle state and provides
+ * intermediate messages from the agent.
+ *
+ * @see {@link https://developer.atlassian.com/platform/forge/remote-agents-in-jira/#streaming--optional-|Streaming docs}
+ */
+export interface TaskStatusUpdateEvent {
+  taskId: string;
+  contextId: string;
+  status: {
+    state: TaskState;
+    timestamp?: string;
+  };
+  /** Optional message accompanying the status update */
+  message?: Message;
+  kind: "status-update";
+  /** Whether this is the final event in the stream (true when task reaches terminal state) */
+  final: boolean;
+}
+
+/**
+ * The result payload of each SSE event in a streaming response.
+ * Each event contains exactly one of: task, statusUpdate, or message.
+ *
+ * - `task`: returned as the first event in the stream
+ * - `statusUpdate`: subsequent progress/state-change events
+ * - `message`: for simple one-shot responses that don't require task tracking
+ *
+ * @see {@link https://developer.atlassian.com/platform/forge/remote-agents-in-jira/#streaming--optional-|Streaming docs}
+ */
+export interface StreamResponse {
+  task?: Task;
+  statusUpdate?: TaskStatusUpdateEvent;
+  message?: Message;
+}
+
+/**
+ * Parameters for the tasks/resubscribe JSON-RPC method.
+ * Called by Jira to re-establish a dropped SSE streaming connection.
+ */
+export interface ResubscribeTaskParams {
+  id: string; // taskId to resubscribe to
+}
+
+/**
  * JSON-RPC 2.0 Request structure for Agent Connector
  * @see {@link https://www.jsonrpc.org/specification|JSON-RPC 2.0 Specification}
  */
 export interface AgentConnectorRequest {
   jsonrpc: "2.0";
   id: string | number;
-  method: "message/send" | "tasks/get" | "tasks/cancel";
-  params: SendMessageParams | GetTaskParams | CancelTaskParams;
+  method:
+    | "message/send"
+    | "tasks/get"
+    | "tasks/cancel"
+    | "tasks/resubscribe";
+  params: SendMessageParams | GetTaskParams | CancelTaskParams | ResubscribeTaskParams;
 }
 
 /**
