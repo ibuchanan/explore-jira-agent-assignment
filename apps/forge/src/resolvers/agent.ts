@@ -188,7 +188,9 @@ function toJsonRpcResponse(
   if (logLabel) console.error(`${logLabel} error:`, result.error);
   const { code, message } =
     errorMap[result.error.status] ?? DEFAULT_JSONRPC_ERROR;
-  return createErrorResponse(id, code, message, { detail: result.error.detail });
+  return createErrorResponse(id, code, message, {
+    detail: result.error.detail,
+  });
 }
 
 /**
@@ -227,7 +229,11 @@ async function dispatchMethod(
       const params = req.params as unknown as GetTaskParams;
       const taskId = params?.id ?? params?.taskId;
       if (!taskId || typeof taskId !== "string") {
-        return createErrorResponse(id, -32602, "Invalid params: taskId is required");
+        return createErrorResponse(
+          id,
+          -32602,
+          "Invalid params: taskId is required",
+        );
       }
       return toJsonRpcResponse(
         id,
@@ -241,7 +247,11 @@ async function dispatchMethod(
       const params = req.params as unknown as CancelTaskParams;
       const taskId = params?.id ?? params?.taskId;
       if (!taskId || typeof taskId !== "string") {
-        return createErrorResponse(id, -32602, "Invalid params: taskId is required");
+        return createErrorResponse(
+          id,
+          -32602,
+          "Invalid params: taskId is required",
+        );
       }
       return toJsonRpcResponse(
         id,
@@ -299,7 +309,10 @@ export async function handleJsonRpc(
     }
 
     const jsonRpcRequest = body as JsonRpcRequest;
-    const response = await dispatchMethod(jsonRpcRequest, { systemToken, userToken });
+    const response = await dispatchMethod(jsonRpcRequest, {
+      systemToken,
+      userToken,
+    });
 
     return new Response(JSON.stringify(response), {
       status: 200,

@@ -4,7 +4,6 @@
   "private": true,
   "description": "Exploration Forge App for integrating AI agents running on external infrastructure (Remote Agents) with Jira Cloud",
   "license": "Apache-2.0",
-  "packageManager": "npm@10.0.0",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -13,14 +12,14 @@
     "build": "turbo run build",
     "changelog": "turbo run changelog",
     "check": "turbo run check",
-    "clean": "turbo run clean",
+    "clean": "rm -rf ./node_modules && rm package-lock.json && turbo run clean",
     "dev": "turbo run dev",
     "dev:remote": "turbo run dev:remote --filter=remote-agent-backend",
-    "format": "turbo run format",
-    "format:check": "turbo run format:check",
     "forge:deploy": "turbo run forge:deploy --filter=explore-jira-agent-assigment",
     "forge:install": "turbo run forge:install --filter=explore-jira-agent-assigment",
     "forge:uninstall": "turbo run forge:uninstall --filter=explore-jira-agent-assigment",
+    "format": "turbo run format",
+    "format:check": "turbo run format:check",
     "generate": "turbo run generate",
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",
@@ -29,8 +28,9 @@
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.14",
-    "turbo": "^2.3",
+    "@biomejs/biome": "2.5.1",
+    "turbo": "^2.10",
     "typescript": "^5.9"
-  }
+  },
+  "packageManager": "npm@10.0.0"
 }

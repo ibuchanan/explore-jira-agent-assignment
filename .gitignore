@@ -273,3 +273,5 @@ package-lock.json
 ## Need some storage for a better dev loop
 database/
 .fallow/
+# CocoIndex Code (ccc)
+/.cocoindex_code/

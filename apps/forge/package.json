@@ -29,7 +29,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@forge/api": "^7.1",
+    "@forge/api": "^8.0.0",
     "forge-ahead": "*"
   },
   "devDependencies": {

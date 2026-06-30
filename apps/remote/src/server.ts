@@ -414,7 +414,9 @@ function streamJokeSteps(
       // Update the stored task
       task.status.state = step.state;
       task.status.timestamp = now;
-      task.status.message.parts = [{ kind: "text", text: prefixAgentMessage(step.text) }];
+      task.status.message.parts = [
+        { kind: "text", text: prefixAgentMessage(step.text) },
+      ];
       saveData();
 
       // Add to context history
@@ -474,7 +476,7 @@ function streamJokeSteps(
  *   3. { statusUpdate, final: true } — completed step, then closes stream
  */
 async function handleSendStreamingMessage(
-  req: import("express").Request,
+  _req: import("express").Request,
   res: import("express").Response,
   params: Record<string, unknown>,
   requestId: string,
@@ -501,7 +503,9 @@ async function handleSendStreamingMessage(
       state: "working" as TaskState,
       message: {
         role: "agent" as const,
-        parts: [{ kind: "text" as const, text: prefixAgentMessage(initialText) }],
+        parts: [
+          { kind: "text" as const, text: prefixAgentMessage(initialText) },
+        ],
         messageId: generateId("msg"),
         taskId,
         contextId,
@@ -690,28 +694,49 @@ async function handleA2aJsonRpc(
   const { jsonrpc, id, method, params } = req.body;
 
   if (jsonrpc !== "2.0") {
-    res.status(400).json({ jsonrpc: "2.0", id, error: { code: -32600, message: "Invalid Request" } });
+    res.status(400).json({
+      jsonrpc: "2.0",
+      id,
+      error: { code: -32600, message: "Invalid Request" },
+    });
     return;
   }
 
-  console.log(`JSON-RPC ${method} called:`, JSON.stringify({ id, params }, null, 2));
+  console.log(
+    `JSON-RPC ${method} called:`,
+    JSON.stringify({ id, params }, null, 2),
+  );
 
-  const wantsStream = (req.headers["accept"] ?? "").includes("text/event-stream");
+  const wantsStream = (req.headers.accept ?? "").includes("text/event-stream");
 
   try {
     if (method === JSON_RPC_METHODS.MESSAGE_SEND && wantsStream) {
-      await handleSendStreamingMessage(req, res, params as Record<string, unknown>, String(id), cloudId);
+      await handleSendStreamingMessage(
+        req,
+        res,
+        params as Record<string, unknown>,
+        String(id),
+        cloudId,
+      );
       return;
     }
 
     if (method === JSON_RPC_METHODS.TASKS_RESUBSCRIBE) {
-      await handleTasksResubscribe(res, params as Record<string, unknown>, String(id));
+      await handleTasksResubscribe(
+        res,
+        params as Record<string, unknown>,
+        String(id),
+      );
       return;
     }
 
     const handler = methodHandlers[method as JsonRpcMethod];
     if (!handler) {
-      res.json({ jsonrpc: "2.0", id, error: { code: -32601, message: "Method not found" } });
+      res.json({
+        jsonrpc: "2.0",
+        id,
+        error: { code: -32601, message: "Method not found" },
+      });
       return;
     }
 
@@ -719,10 +744,16 @@ async function handleA2aJsonRpc(
     const successResponse = { jsonrpc: "2.0", id, result };
 
     if (method === JSON_RPC_METHODS.MESSAGE_SEND) {
-      console.log("JSON-RPC message/send response:", JSON.stringify(successResponse, null, 2));
+      console.log(
+        "JSON-RPC message/send response:",
+        JSON.stringify(successResponse, null, 2),
+      );
     }
     if (method === JSON_RPC_METHODS.TASKS_GET) {
-      console.log("JSON-RPC tasks/get response (full):", JSON.stringify(successResponse, null, 2));
+      console.log(
+        "JSON-RPC tasks/get response (full):",
+        JSON.stringify(successResponse, null, 2),
+      );
     }
 
     res.json(successResponse);
@@ -734,7 +765,11 @@ async function handleA2aJsonRpc(
       error: errorMessage,
       stack: error instanceof Error ? error.stack : undefined,
     });
-    res.json({ jsonrpc: "2.0", id, error: { code: errorCode, message: errorMessage } });
+    res.json({
+      jsonrpc: "2.0",
+      id,
+      error: { code: errorCode, message: errorMessage },
+    });
   }
 }
 

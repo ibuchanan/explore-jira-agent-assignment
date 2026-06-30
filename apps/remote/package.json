@@ -29,14 +29,14 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "express": "^5.2",
+    "express": "^5.2.1",
     "forge-ahead": "*"
   },
   "devDependencies": {
-    "@types/express": "^5.0",
+    "@types/express": "^5.0.6",
     "@types/node": "24",
-    "tsx": "^4.7",
+    "tsx": "^4.22.4",
     "typescript": "^6.0",
-    "vitest": "^4.1.2"
+    "vitest": "^4.1.9"
   }
 }

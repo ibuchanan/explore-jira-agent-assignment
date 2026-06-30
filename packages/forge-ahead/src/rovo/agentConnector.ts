@@ -221,12 +221,12 @@ export interface ResubscribeTaskParams {
 export interface AgentConnectorRequest {
   jsonrpc: "2.0";
   id: string | number;
-  method:
-    | "message/send"
-    | "tasks/get"
-    | "tasks/cancel"
-    | "tasks/resubscribe";
-  params: SendMessageParams | GetTaskParams | CancelTaskParams | ResubscribeTaskParams;
+  method: "message/send" | "tasks/get" | "tasks/cancel" | "tasks/resubscribe";
+  params:
+    | SendMessageParams
+    | GetTaskParams
+    | CancelTaskParams
+    | ResubscribeTaskParams;
 }
 
 /**
