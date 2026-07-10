@@ -22,6 +22,7 @@ import {
   isActiveState,
   isTerminalState,
   isValidAgentConnectorResponse,
+  isValidStreamResponse,
   isValidTransition,
   TASK_STATE_TRANSITIONS,
   type Task,
@@ -278,6 +279,109 @@ describe("A2A Protocol — behavioural tests", () => {
       };
       expect(formatted.status.message.taskId).toBe("task-123");
       expect(formatted.status.message.contextId).toBe("ctx-override");
+    });
+  });
+
+  describe("isValidStreamResponse", () => {
+    it("should return true for a task snapshot variant", () => {
+      const response = { task: makeTask() };
+      expect(isValidStreamResponse(response)).toBe(true);
+    });
+
+    it("should return true for a status update variant", () => {
+      const response = {
+        statusUpdate: {
+          taskId: "task-123",
+          contextId: "ctx-456",
+          status: { state: "working" },
+          kind: "status-update",
+          final: false,
+        },
+      };
+      expect(isValidStreamResponse(response)).toBe(true);
+    });
+
+    it("should return true for a plain message content variant", () => {
+      const response = {
+        message: {
+          role: "agent",
+          parts: [{ kind: "text", text: "Inspecting the repository..." }],
+          messageId: "msg-1",
+          kind: "message",
+        },
+      };
+      expect(isValidStreamResponse(response)).toBe(true);
+    });
+
+    it("should return true for a complete artifact update variant", () => {
+      const response = {
+        artifactUpdate: {
+          taskId: "task-123",
+          contextId: "ctx-456",
+          artifact: {
+            artifactId: "artifact-1",
+            name: "Implementation summary",
+            parts: [{ kind: "text", text: "Summary of changes" }],
+          },
+          kind: "artifact-update",
+        },
+      };
+      expect(isValidStreamResponse(response)).toBe(true);
+    });
+
+    it("should return false when more than one variant is present", () => {
+      const response = { task: makeTask(), message: { kind: "message" } };
+      expect(isValidStreamResponse(response)).toBe(false);
+    });
+
+    it("should return false when no variant is present", () => {
+      expect(isValidStreamResponse({})).toBe(false);
+    });
+
+    it("should return false for null", () => {
+      expect(isValidStreamResponse(null)).toBe(false);
+    });
+
+    it("should return false when an artifact update's artifact has no parts array", () => {
+      const response = {
+        artifactUpdate: {
+          taskId: "task-123",
+          contextId: "ctx-456",
+          artifact: { artifactId: "artifact-1" },
+          kind: "artifact-update",
+        },
+      };
+      expect(isValidStreamResponse(response)).toBe(false);
+    });
+
+    it("should return false when append is not a boolean", () => {
+      const response = {
+        artifactUpdate: {
+          taskId: "task-123",
+          contextId: "ctx-456",
+          artifact: { artifactId: "artifact-1", parts: [] },
+          append: "yes",
+          kind: "artifact-update",
+        },
+      };
+      expect(isValidStreamResponse(response)).toBe(false);
+    });
+
+    it("should return true for an incremental artifact chunk with append and lastChunk", () => {
+      const response = {
+        artifactUpdate: {
+          taskId: "task-123",
+          contextId: "ctx-456",
+          artifact: {
+            artifactId: "artifact-1",
+            parts: [{ kind: "text", text: "chunk 2 of 2" }],
+          },
+          append: true,
+          lastChunk: true,
+          kind: "artifact-update",
+        },
+      };
+      expect(isValidStreamResponse(response)).toBe(true);
     });
   });
 

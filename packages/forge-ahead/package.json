@@ -47,7 +47,8 @@
     "jose": "^6.2",
     "neverthrow": "^8.2",
     "typescript": "^5.9",
-    "yaml": "^2.8"
+    "yaml": "^2.8",
+    "zod": "^4.1"
   },
   "devDependencies": {
     "@types/node": "24",

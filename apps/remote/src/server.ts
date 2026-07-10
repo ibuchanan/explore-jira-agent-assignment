@@ -48,10 +48,28 @@ interface TaskStatusUpdateEvent {
   final: boolean;
 }
 
+interface StreamArtifact {
+  artifactId: string;
+  name?: string;
+  description?: string;
+  parts: Array<{ kind: "text" | "data"; text?: string; data?: unknown }>;
+  metadata?: Record<string, unknown>;
+}
+
+interface TaskArtifactUpdateEvent {
+  taskId: string;
+  contextId: string;
+  artifact: StreamArtifact;
+  append?: boolean;
+  lastChunk?: boolean;
+  kind: "artifact-update";
+}
+
 interface StreamResponse {
   task?: unknown;
   statusUpdate?: TaskStatusUpdateEvent;
   message?: StreamingMessage;
+  artifactUpdate?: TaskArtifactUpdateEvent;
 }
 
 export const app = express();

@@ -9,6 +9,8 @@
  * @see {@link https://a2a.dev|Agent2Agent Protocol}
  */
 
+import { z } from "zod";
+
 // Re-export JSON-RPC types for convenience
 export type { JsonRpcRequest, JsonRpcResponse } from "../util/jsonrpc";
 export { isJsonRpcError } from "../util/jsonrpc";
@@ -191,12 +193,48 @@ export interface TaskStatusUpdateEvent {
 }
 
 /**
+ * A formal A2A task output produced during task execution, intended to be
+ * rendered, reviewed, persisted, or referenced after it is streamed.
+ *
+ * `name`, `description`, and `metadata` are display/annotation text; this
+ * module does not define a required metadata key schema.
+ *
+ * @see {@link https://a2a-protocol.org/latest/specification/|A2A specification}
+ */
+export interface Artifact {
+  artifactId: string;
+  name?: string;
+  description?: string;
+  parts: MessagePart[];
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * An artifact update event emitted during SSE streaming. Carries a Jira/
+ * user-reviewable task output, either complete or as an incremental chunk
+ * using the A2A `append`/`lastChunk` fields.
+ *
+ * @see {@link https://a2a-protocol.org/latest/specification/|A2A specification}
+ */
+export interface TaskArtifactUpdateEvent {
+  taskId: string;
+  contextId: string;
+  artifact: Artifact;
+  /** When true, append this artifact's parts to the previous chunk rather than replacing it */
+  append?: boolean;
+  /** When true, this is the final chunk of the artifact */
+  lastChunk?: boolean;
+  kind: "artifact-update";
+}
+
+/**
  * The result payload of each SSE event in a streaming response.
- * Each event contains exactly one of: task, statusUpdate, or message.
+ * Each event contains exactly one of: task, statusUpdate, message, or artifactUpdate.
  *
  * - `task`: returned as the first event in the stream
  * - `statusUpdate`: subsequent progress/state-change events
  * - `message`: for simple one-shot responses that don't require task tracking
+ * - `artifactUpdate`: a Jira/user-reviewable task output, complete or chunked
  *
  * @see {@link https://developer.atlassian.com/platform/forge/remote-agents-in-jira/#streaming--optional-|Streaming docs}
  */
@@ -204,6 +242,39 @@ export interface StreamResponse {
   task?: Task;
   statusUpdate?: TaskStatusUpdateEvent;
   message?: Message;
+  artifactUpdate?: TaskArtifactUpdateEvent;
+}
+
+// Shape of a TaskArtifactUpdateEvent's artifact deep enough to catch the
+// cases isValidStreamResponse must reject: missing parts, or append/lastChunk
+// present with the wrong type. Everything else is passthrough — this module
+// does not define a required artifact schema (see Artifact above).
+const ArtifactUpdateEventShape = z
+  .object({
+    artifact: z.object({ parts: z.array(z.unknown()) }).loose(),
+    append: z.boolean().optional(),
+    lastChunk: z.boolean().optional(),
+  })
+  .loose();
+
+// Each branch is `.strict()` so a StreamResponse with more than one variant
+// key fails every branch, encoding "exactly one of task, statusUpdate,
+// message, or artifactUpdate" as a union rather than manual key counting.
+const StreamResponseSchema = z.union([
+  z.object({ task: z.unknown() }).strict(),
+  z.object({ statusUpdate: z.unknown() }).strict(),
+  z.object({ message: z.unknown() }).strict(),
+  z.object({ artifactUpdate: ArtifactUpdateEventShape }).strict(),
+]);
+
+/**
+ * Validate that a value is a well-formed StreamResponse: exactly one of
+ * `task`, `statusUpdate`, `message`, or `artifactUpdate` present.
+ */
+export function isValidStreamResponse(
+  response: unknown,
+): response is StreamResponse {
+  return StreamResponseSchema.safeParse(response).success;
 }
 
 /**
