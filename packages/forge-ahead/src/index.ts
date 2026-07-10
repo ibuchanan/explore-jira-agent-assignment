@@ -83,6 +83,9 @@ export {
   TASK_STATE_TRANSITIONS,
   TERMINAL_TASK_STATES,
 } from "./rovo/agentConnector";
+// Re-export provider-neutral Remote Agent Signal mapping types and utilities
+export type { MappedEvent, RemoteAgentSignal } from "./rovo/signalMapper";
+export { mapRemoteAgentSignal } from "./rovo/signalMapper";
 // Re-export utility error handling
 export type { ProblemDetails, Result } from "./util/errors";
 export { err, ok, StandardError } from "./util/errors";
