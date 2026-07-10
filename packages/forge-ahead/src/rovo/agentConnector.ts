@@ -396,23 +396,33 @@ export interface AgentConnectorDatabaseSchema {
   };
 }
 
+// `result`/`error` are intentionally loose objects, not a deep Task schema —
+// this mirrors the JSON-RPC envelope check that existed before zod, not a
+// content validator for the result payload.
+const AgentConnectorResponseSchema = z.union([
+  z
+    .object({
+      jsonrpc: z.literal("2.0"),
+      id: z.union([z.string(), z.number()]),
+      result: z.record(z.string(), z.unknown()),
+    })
+    .strict(),
+  z
+    .object({
+      jsonrpc: z.literal("2.0"),
+      id: z.union([z.string(), z.number()]),
+      error: z.record(z.string(), z.unknown()),
+    })
+    .strict(),
+]);
+
 /**
  * Validation helper to check if a response is a valid AgentConnectorResponse
  */
 export function isValidAgentConnectorResponse(
   response: unknown,
 ): response is AgentConnectorResponse {
-  if (typeof response !== "object" || response === null) {
-    return false;
-  }
-
-  const obj = response as Record<string, unknown>;
-  return (
-    obj.jsonrpc === "2.0" &&
-    (typeof obj.id === "string" || typeof obj.id === "number") &&
-    (("result" in obj && typeof obj.result === "object") ||
-      ("error" in obj && typeof obj.error === "object"))
-  );
+  return AgentConnectorResponseSchema.safeParse(response).success;
 }
 
 /**
