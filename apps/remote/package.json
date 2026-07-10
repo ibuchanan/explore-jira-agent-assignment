@@ -30,7 +30,8 @@
   },
   "dependencies": {
     "express": "^5.2.1",
-    "forge-ahead": "*"
+    "forge-ahead": "*",
+    "yaml": "^2.8"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
