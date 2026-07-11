@@ -3,7 +3,7 @@
     "role": "user",
     "parts": [
       {
-        "text": "You have been assigned to a work item \"Tell me a joke\". Analyze the details of the work item and get started.",
+        "text": "You have been assigned to a work item \"Investigate the reported issue\". Analyze the details of the work item and get started.",
         "kind": "text"
       },
       {
@@ -13,7 +13,7 @@
           "issue": {
             "id": "66431",
             "fields": {
-              "summary": "Tell me a joke",
+              "summary": "Investigate the reported issue",
               "description": "H1 heading example – demonstrates heading level 1\nThis Atlassian Document Format (ADF) description is a concise showcase of many formatting elements.\nH2 heading example – demonstrates heading level 2\nThis paragraph node demonstrates plain paragraph text."
             }
           }

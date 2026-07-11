@@ -8,6 +8,7 @@ Related docs:
 
 - End-to-end overview and setup: root [`README.md`](../../README.md)
 - Forge app manifest, scopes, and deployment: [`apps/forge/README.md`](../forge/README.md)
+- Authoring or editing Simulation Scenarios: [`scenarios/README.md`](scenarios/README.md)
 
 ## Responsibilities
 
@@ -16,7 +17,8 @@ The backend service demonstrates how a remote agent integration can:
 - receive Forge installation lifecycle webhooks
 - store Jira installation metadata for later task handling
 - verify incoming Forge remote requests with FIT validation
-- implement the JSON-RPC task methods Jira calls for remote agents
+- implement the JSON-RPC task methods Jira calls for remote agents, including streaming and `tasks/resubscribe`
+- run a general-purpose A2A Simulator driven by editable YAML Simulation Scenarios (see [`scenarios/README.md`](scenarios/README.md)), including a Simulated Coding Remote Agent scenario set
 - create and track private user-agent contexts
 - create, fetch, cancel, and manually advance sample tasks
 - receive app system and app user OAuth tokens forwarded by Forge
@@ -36,6 +38,7 @@ Express service
   ├─ auth middleware verifies the Forge Invocation Token
   ├─ installation handler records Jira site installation data
   ├─ JSON-RPC dispatcher routes Jira task methods
+  ├─ A2A Simulator matches and plays back a Simulation Scenario for streaming requests
   ├─ task/context storage persists demo state locally
   └─ demo advance endpoint simulates agent progress
 ```
@@ -141,11 +144,15 @@ Implemented methods:
 
 | Method | Behavior |
 | --- | --- |
-| `message/send` | Creates or updates a context, creates a new task, records the user message, and immediately transitions the sample task to `working`. |
+| `message/send` (polling) | Creates or updates a context, creates a new task, records the user message, and immediately transitions the sample task to `working`. |
+| `message/send` (streaming, `Accept: text/event-stream`) | Matches a Simulation Scenario from the starting task text and streams it as SSE task, status, and artifact updates. A follow-up `message/send` carrying the same `taskId` resumes a task paused at `auth-required` or `input-required`. |
 | `tasks/get` | Returns the stored task's current state and user-facing status message. |
-| `tasks/cancel` | Transitions a cancellable task to `canceled` and returns the updated task. |
+| `tasks/cancel` | Stops an actively streaming scenario (or schedules a delayed transition for a polled task), then reports terminal `canceled`. |
+| `tasks/resubscribe` | Streams the task's current snapshot, then — if the task is still active — continues the matched scenario from the next step that hasn't been streamed yet, rather than replaying it from the start. |
 
 The sample accepts either `id` or `taskId` in `tasks/get` and `tasks/cancel` params to accommodate current Jira behavior and the documented schema.
+
+See [`scenarios/README.md`](scenarios/README.md) for how Simulation Scenarios are matched, validated, and authored.
 
 ### `POST /atlassian/config`
 
@@ -153,9 +160,9 @@ Placeholder endpoint for future configuration flows, such as tenant mapping or a
 
 ### `POST /tasks/:taskId/advance`
 
-Development-only endpoint for manually progressing a sample task.
+Development-only endpoint for manually progressing a sample task outside of any Simulation Scenario — useful for ad hoc state changes while poking at the sample with `curl`.
 
-This endpoint is not part of the Jira remote-agent contract. The helper scripts in `apps/remote/scripts/` use it to simulate task progress during demos.
+This endpoint is not part of the Jira remote-agent contract, and it is unrelated to the A2A Simulator: it sets task state directly rather than playing back a scenario.
 
 Example body:
 
@@ -235,17 +242,20 @@ For fetching Jira context to process a user's task, prefer the app user token so
 
 Production implementations must also enforce tenant mapping, account mapping if needed, and isolation of memory or cached Jira data by tenant and user.
 
-## Demo scripts
+## Exploring the simulated streaming behavior
 
-The `scripts/` directory contains small helpers for manually moving sample tasks through a demo flow:
+There are no manual demo scripts for the streaming flow: the A2A Simulator's
+`/a2a/json-rpc` route requires a real Forge Invocation Token, so a bare
+`curl` from outside a Forge-mediated request cannot reach it. Instead:
 
-- `1-knock-knock.sh`
-- `2-otto.sh`
-- `3-punchline.sh`
-- `advance-task-completed.sh`
-- `advance-task-failed.sh`
-
-These scripts call the development-only task advance endpoint. They are not part of the production integration pattern.
+- add or edit files in [`scenarios/`](scenarios/README.md) to see the
+  simulator play back different streamed behavior — no TypeScript changes
+  required
+- run `npm test` to exercise every scenario end-to-end over the real
+  `/a2a/json-rpc` streaming route (see `tests/a2a-json-rpc.test.ts`)
+- to see it through a real Jira interaction, deploy and install the Forge
+  app pointed at this service (see the repository-root README) and assign a
+  work item to the agent
 
 ## Production gaps
 

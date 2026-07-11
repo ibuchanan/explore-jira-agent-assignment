@@ -45,16 +45,20 @@ After setup, this sample shows how to:
   that Jira can call for agent installation and task handling
 - receive Forge installation lifecycle events and persist installation metadata
 - handle Agent2Agent-inspired JSON-RPC methods for Jira task interactions:
-  - `message/send`
+  - `message/send` (polling and streaming)
   - `tasks/get`
   - `tasks/cancel`
+  - `tasks/resubscribe`
 - track agent contexts, tasks, task states, 
   and status messages in a remote backend
 - authenticate incoming Jira-to-remote requests 
   with Forge Invocation Tokens (FITs)
 - receive Forge app system and app user tokens 
   for calling Jira REST APIs from the remote service
-- simulate task progress locally while developing the integration
+- run a general-purpose A2A Simulator, driven by editable YAML
+  Simulation Scenarios, so streamed Remote Agent behavior can be
+  demonstrated and tested without a real agent backend — including a
+  Simulated Coding Remote Agent scenario set
 
 ## Architecture
 
@@ -185,17 +189,12 @@ run the relevant workspace script directly.
 
 ## Simulate the sample flow
 
-The remote backend includes helper scripts in `apps/remote/scripts/` 
-to simulate task progression:
-
-- `1-knock-knock.sh`
-- `2-otto.sh`
-- `3-punchline.sh`
-- `advance-task-completed.sh`
-- `advance-task-failed.sh`
-
-These are useful when demonstrating the app 
-or testing the sample's task state behavior.
+The remote backend's streamed behavior is driven by editable YAML
+Simulation Scenarios under `apps/remote/scenarios/` rather than hardcoded
+demo scripts — see [`apps/remote/scenarios/README.md`](apps/remote/scenarios/README.md)
+for how to add or edit one, and [`apps/remote/README.md`](apps/remote/README.md#exploring-the-simulated-streaming-behavior)
+for how to exercise them (mainly via `npm test`, since `/a2a/json-rpc`
+requires a real Forge Invocation Token that a bare `curl` can't supply).
 
 ## Repository layout
 
@@ -215,6 +214,9 @@ or testing the sample's task state behavior.
 - `apps/remote/src/server.ts` — remote installation and task endpoints
 - `apps/remote/src/auth.ts` — FIT validation middleware for Forge remotes
 - `apps/remote/src/storage.ts` — simple local persistence for sample state
+- `apps/remote/src/scenarios.ts` — Simulation Scenario loading, validation, and matching
+- `apps/remote/src/simulator.ts` — A2A Simulator scenario-step-to-event mapping and playback
+- `apps/remote/scenarios/` — the editable Simulation Scenario YAML files themselves
 - `packages/forge-ahead/src/` — reusable helpers and types used by the sample
 
 ## Common commands
