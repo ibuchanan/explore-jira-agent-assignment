@@ -1,9 +1,9 @@
 # Forge Remote Agent App
 
-This workspace contains 
-the Forge app used by the sample remote-agent integration. 
-The app is the Atlassian-facing installable component: 
-it declares the Jira remote agent connector, 
+This workspace contains
+the Forge app used by the sample remote-agent integration.
+The app is the Atlassian-facing installable component:
+it declares the Jira remote agent connector,
 wires Jira task traffic to a remote backend,
 and configures the scopes and remote permissions needed by the integration.
 
@@ -14,6 +14,8 @@ Related docs:
 - End-to-end overview and setup: root [`README.md`](../../README.md)
 - Remote backend endpoints, storage, and demo flow:
   [`apps/remote/README.md`](../remote/README.md)
+- Diagnosing FIT auth failures: [How-to guide](../../docs/how-to-guides/diagnose-fit-auth-failures.md)
+- Why this app is a thin trust boundary: [Explanation](../../docs/explanation/why-three-layers.md)
 - Official guide: [Integrate remote agents with Jira][remote-agents-guide]
 - Official reference: [`rovo:agentConnector` module][agent-connector-ref]
 
@@ -22,7 +24,7 @@ Related docs:
 The Forge app demonstrates how to:
 
 - register a Jira remote agent through a `rovo:agentConnector` module
-- declare Forge remote endpoints for 
+- declare Forge remote endpoints for
   task handling, installation, and configuration
 - route Agent2Agent-inspired JSON-RPC traffic to the remote backend
 - receive Forge installation lifecycle events
@@ -30,8 +32,8 @@ The Forge app demonstrates how to:
 - declare the Jira scopes required by the sample
 - validate Forge manifest and architecture assumptions with tests
 
-This app is middleware. 
-It does not run the actual external AI agent; 
+This app is middleware.
+It does not run the actual external AI agent;
 that belongs in the remote backend or an agent runtime called by the backend.
 
 ## Architecture role
@@ -44,8 +46,8 @@ Jira Cloud
 Forge app
   │
   ├─ manifest declares agent connector, endpoints, remote, scopes, and tokens
-  ├─ JSON-RPC resolver forwards task traffic to the backend remote
-  └─ installation handler processes app install lifecycle events
+  ├─ endpoint modules proxy task traffic to the backend remote
+  └─ installation trigger delivers lifecycle events to the backend remote
   ▼
 Remote backend service
 ```
@@ -72,9 +74,9 @@ modules:
             endpoint: a2a-json-rpc-endpoint
 ```
 
-This makes the sample agent available in Jira 
-and tells Jira which Forge endpoint to use for JSON-RPC task traffic. 
-The official guide explains the Jira user flow and the Agent2Agent transport contract: 
+This makes the sample agent available in Jira
+and tells Jira which Forge endpoint to use for JSON-RPC task traffic.
+The official guide explains the Jira user flow and the Agent2Agent transport contract:
 [Integrate remote agents with Jira][remote-agents-guide].
 
 ### Endpoints
@@ -96,7 +98,7 @@ modules:
         path: /atlassian/config
 ```
 
-These endpoint definitions connect Forge's product-facing entry points 
+These endpoint definitions connect Forge's product-facing entry points
 to routes on the configured remote backend.
 
 | Endpoint key | Remote path | Purpose |
@@ -116,8 +118,8 @@ modules:
         - avi:forge:installed:app
 ```
 
-The installation trigger is used 
-so the integration can learn when a Jira site installs the app 
+The installation trigger is used
+so the integration can learn when a Jira site installs the app
 and record installation metadata in the remote service.
 
 ### Remote backend
@@ -140,32 +142,26 @@ remotes:
 
 #### Why Forge Remote is required, not optional
 
-The [Jira remote agents architecture][remote-agents-guide] is built around the premise that
-the agent's compute runs **outside** Atlassian infrastructure — on your own servers, cloud
-functions, or AI platform. Forge Remote is the mechanism that bridges that external service
-into the Forge security model. It is not a design choice or a trade-off to re-evaluate; it
-is a structural requirement of the remote agents pattern:
+The [Jira remote agents architecture][remote-agents-guide] is built around the
+premise that the agent's compute runs **outside** Atlassian infrastructure.
+Forge Remote is the mechanism that bridges that external service into the Forge
+security model — it is a structural requirement of the remote agents pattern,
+not a trade-off to re-evaluate. If you want compute to run inside Forge instead,
+you'd be building a **Runs on Atlassian** app, which is a different architecture
+from remote agents.
 
-- **Long-lived connections** — SSE streaming (`streaming: true`) requires an open HTTP
-  connection for seconds to minutes. Forge functions time out in seconds and cannot hold
-  open connections. The remote backend holds the connection; Forge proxies through it.
-- **Your compute, your LLM** — The agent's intelligence lives in `apps/remote` (or your
-  production equivalent). Forge's role is limited to authenticating the request, forwarding
-  it, and relaying the response. None of the agent logic runs inside Forge.
-- **FIT authentication** — Jira attaches a Forge Invocation Token (FIT) to every request.
-  Declaring the backend under `remotes:` is what tells Forge to issue and attach that token,
-  so your backend can verify the request is genuinely from Jira and not a third party.
-
-If you want compute to run inside Forge (i.e., to qualify for **Runs on Atlassian**),
-you would need to implement the agent logic entirely in a Forge function — which is a
-different architecture and not "remote agents".
+See [Explanation: Why this sample has three separate
+layers](../../docs/explanation/why-three-layers.md)
+for why the transport, compute-ownership, and FIT-trust constraints behind
+this make the split structural rather than a preference this sample happened
+to land on.
 
 ---
 
 `REMOTE_SERVICE_URL` must point at the public HTTPS base URL for
-`apps/remote` or another compatible remote backend. 
-The remote must be configured as a Forge remote 
-so Jira-to-remote requests include Forge Invocation Tokens 
+`apps/remote` or another compatible remote backend.
+The remote must be configured as a Forge remote
+so Jira-to-remote requests include Forge Invocation Tokens
 and, when enabled, forwarded OAuth tokens.
 
 Token forwarding is enabled so the backend can receive:
@@ -173,7 +169,7 @@ Token forwarding is enabled so the backend can receive:
 - `x-forge-oauth-system` for app-attributed Jira API calls
 - `x-forge-oauth-user` for user-attributed Jira API calls
 
-For task-specific Jira context fetching, 
+For task-specific Jira context fetching,
 prefer the app user token so Jira permissions are respected.
 
 ### Scopes
@@ -186,38 +182,25 @@ permissions:
     - read:jira-work
 ```
 
-These scopes allow token forwarding 
-and read access to Jira work data used by the sample. 
-If you add scopes or change egress/remote permissions, 
+These scopes allow token forwarding
+and read access to Jira work data used by the sample.
+If you add scopes or change egress/remote permissions,
 redeploy the app and upgrade the installation.
 
 ## Source files
 
 - `manifest.yml` — Forge modules, remotes, token settings, runtime, and scopes
-- `src/index.ts` — exports Forge handlers referenced by the app
-- `src/resolvers/agent.ts` — JSON-RPC handler and backend forwarding logic
+- `src/index.ts` — placeholder entry point; no local Forge handler is
+  currently wired in
 - `tests/forge/` — manifest, module, endpoint, and architecture tests
 - `vitest.config.ts` — test configuration for this workspace
 
-## JSON-RPC forwarding
+## JSON-RPC routing
 
-`src/resolvers/agent.ts` handles JSON-RPC requests 
-for the methods Jira uses to communicate with the remote agent:
-
-| Method | Forge behavior |
-| --- | --- |
-| `message/send` | Validates and forwards params to the backend. |
-| `tasks/get` | Forwards task lookup requests to the backend. |
-| `tasks/cancel` | Forwards task cancellation requests to the backend. |
-
-The resolver uses `invokeRemote("backend-service", ...)` 
-to call the remote backend route declared in the manifest. 
-It forwards available app system 
-and app user tokens as headers 
-so the backend can call Jira APIs when appropriate.
-
-HTTP-level and JSON-RPC-level backend errors are converted into structured
-JSON-RPC responses for Jira.
+`a2a-json-rpc-endpoint` has no `function:` field, so Forge proxies
+`/a2a/json-rpc` straight to the remote backend with no app code in the
+request path. Keep JSON-RPC behavior in the remote backend unless the
+manifest is changed to use a local Forge function.
 
 ## Installation handling
 
@@ -289,21 +272,21 @@ The scripts load `.env` before running Forge CLI commands.
    npm run forge:install
    ```
 
-If you change scopes, remotes, token settings, 
-or other permission-affecting manifest fields, 
-redeploy and upgrade the installed app 
+If you change scopes, remotes, token settings,
+or other permission-affecting manifest fields,
+redeploy and upgrade the installed app
 so Jira consents to the new version.
 
 ## Testing
 
-This workspace uses Vitest and architecture tests 
+This workspace uses Vitest and architecture tests
 to keep the Forge app aligned with the manifest and expected remote-agent wiring.
 
 ```bash
 npm run test
 ```
 
-Run `npm run lint` after manifest changes 
+Run `npm run lint` after manifest changes
 because it includes both Biome linting and `forge lint`.
 
 ## Production considerations
@@ -312,7 +295,7 @@ Before adapting this Forge app for production, consider adding:
 
 - a real configuration UI, such as a Jira admin page for tenant mapping
 - a personal settings page if users must map individual accounts
-- stricter handling of installation, upgrade, 
+- stricter handling of installation, upgrade,
   and future uninstall lifecycle behavior
 - clearer recovery behavior when the remote backend is unavailable
 - tighter scope review as you add Jira API usage

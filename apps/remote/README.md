@@ -1,6 +1,9 @@
 # Remote Agent Backend Service
 
-This workspace contains the externally hosted backend used by the sample Forge app. It receives Jira remote-agent requests through Forge remote endpoints, verifies Forge Invocation Tokens (FITs), stores sample installation and task state, and returns Agent2Agent-inspired JSON-RPC task responses to Jira.
+This workspace contains the externally hosted backend used by the sample Forge
+app. It receives Jira remote-agent requests through Forge remote endpoints,
+verifies Forge Invocation Tokens (FITs), stores sample installation and task
+state, and returns Agent2Agent-inspired JSON-RPC task responses to Jira.
 
 Use this README when you are working on the remote service itself.
 
@@ -9,6 +12,10 @@ Related docs:
 - End-to-end overview and setup: root [`README.md`](../../README.md)
 - Forge app manifest, scopes, and deployment: [`apps/forge/README.md`](../forge/README.md)
 - Authoring or editing Simulation Scenarios: [`scenarios/README.md`](scenarios/README.md)
+- Run the whole sample end-to-end: [Tutorial](../../docs/tutorials/run-the-sample-end-to-end.md)
+- The A2A JSON-RPC wire contract: [Reference](../../docs/reference/a2a-json-rpc-endpoint.md)
+- Diagnosing FIT auth failures: [How-to guide](../../docs/how-to-guides/diagnose-fit-auth-failures.md)
+- Why this backend owns compute and state: [Explanation](../../docs/explanation/why-three-layers.md)
 
 ## Responsibilities
 
@@ -17,14 +24,18 @@ The backend service demonstrates how a remote agent integration can:
 - receive Forge installation lifecycle webhooks
 - store Jira installation metadata for later task handling
 - verify incoming Forge remote requests with FIT validation
-- implement the JSON-RPC task methods Jira calls for remote agents, including streaming and `tasks/resubscribe`
-- run a general-purpose A2A Simulator driven by editable YAML Simulation Scenarios (see [`scenarios/README.md`](scenarios/README.md)), including a Simulated Coding Remote Agent scenario set
+- implement the JSON-RPC task methods Jira calls for remote agents, including
+  streaming and `tasks/resubscribe`
+- run a general-purpose A2A Simulator driven by editable YAML Simulation
+  Scenarios (see [`scenarios/README.md`](scenarios/README.md)), including a
+  Simulated Coding Remote Agent scenario set
 - create and track private user-agent contexts
 - create, fetch, cancel, and manually advance sample tasks
 - receive app system and app user OAuth tokens forwarded by Forge
 - expose local debug-style endpoints for demos and development
 
-This service is intentionally simple. It is a development sample, not a production agent runtime.
+This service is intentionally simple. It is a development sample, not a
+production agent runtime.
 
 ## Runtime architecture
 
@@ -43,7 +54,9 @@ Express service
   └─ demo advance endpoint simulates agent progress
 ```
 
-In a production integration, this service is where you would call your actual agent runtime, enqueue long-running work, persist state in a real database, and enforce tenant and user authorization rules.
+In a production integration, this service is where you would call your actual
+agent runtime, enqueue long-running work, persist state in a real database, and
+enforce tenant and user authorization rules.
 
 ## Prerequisites
 
@@ -72,7 +85,9 @@ export HOSTNAME=
 | `PORT` | Local Express server port. Defaults to `3000` if unset. |
 | `HOSTNAME` | Reserved `zrok` hostname used by the sample tunnel script. |
 
-If you are not using `zrok`, you can still run the server directly and expose it with another HTTPS tunnel or deployment platform. Make sure the Forge app's `REMOTE_SERVICE_URL` matches the public base URL for this service.
+If you are not using `zrok`, you can still run the server directly and expose it
+with another HTTPS tunnel or deployment platform. Make sure the Forge app's
+`REMOTE_SERVICE_URL` matches the public base URL for this service.
 
 ## Development
 
@@ -93,7 +108,8 @@ The workspace script currently runs:
 - `npm run dev:tunnel` — starts the `zrok` reserved share from `.env`
 - `npm run dev:remote` — starts `tsx watch src/server.ts`
 
-If you use a different tunnel, start it separately and use `npm run dev:remote` for the service process.
+If you use a different tunnel, start it separately and use `npm run dev:remote`
+for the service process.
 
 ## Build and run
 
@@ -122,7 +138,9 @@ Expected security and request context:
 - FIT is verified by `authMiddleware`
 - request body includes the Forge lifecycle payload
 
-The handler extracts the Jira `cloudId` from the installation context ARI, fetches Jira server information through Atlassian's API gateway, and stores a local installation record containing:
+The handler extracts the Jira `cloudId` from the installation context ARI,
+fetches Jira server information through Atlassian's API gateway, and stores a
+local installation record containing:
 
 - `cloudId`
 - `installationId`
@@ -132,13 +150,19 @@ The handler extracts the Jira `cloudId` from the installation context ARI, fetch
 
 ### `POST /a2a/json-rpc`
 
-Handles task interactions from Jira. Requests must be JSON-RPC 2.0 and are authenticated with a FIT.
+Handles task interactions from Jira. Requests must be JSON-RPC 2.0 and are
+authenticated with a FIT. See
+[Reference: A2A JSON-RPC endpoint](../../docs/reference/a2a-json-rpc-endpoint.md)
+for the full wire contract; the table below covers this sample's specific
+behavior for each method.
 
 Relevant headers:
 
 - `Authorization: Bearer <FIT>` — required for Forge remote request verification
-- `x-forge-oauth-system: <token>` — available when the Forge manifest enables app system tokens
-- `x-forge-oauth-user: <token>` — available when the Forge manifest enables app user tokens
+- `x-forge-oauth-system: <token>` — available when the Forge manifest enables
+  app system tokens
+- `x-forge-oauth-user: <token>` — available when the Forge manifest enables
+  app user tokens
 
 Implemented methods:
 
@@ -150,19 +174,27 @@ Implemented methods:
 | `tasks/cancel` | Stops an actively streaming scenario (or schedules a delayed transition for a polled task), then reports terminal `canceled`. |
 | `tasks/resubscribe` | Streams the task's current snapshot, then — if the task is still active — continues the matched scenario from the next step that hasn't been streamed yet, rather than replaying it from the start. |
 
-The sample accepts either `id` or `taskId` in `tasks/get` and `tasks/cancel` params to accommodate current Jira behavior and the documented schema.
+The sample accepts either `id` or `taskId` in `tasks/get` and `tasks/cancel`
+params to accommodate current Jira behavior and the documented schema.
 
-See [`scenarios/README.md`](scenarios/README.md) for how Simulation Scenarios are matched, validated, and authored.
+See [`scenarios/README.md`](scenarios/README.md) for how Simulation Scenarios
+are matched, validated, and authored.
 
 ### `POST /atlassian/config`
 
-Placeholder endpoint for future configuration flows, such as tenant mapping or account mapping. It is authenticated with FIT validation and currently returns `{ "success": true }`.
+Placeholder endpoint for future configuration flows, such as tenant mapping or
+account mapping. It is authenticated with FIT validation and currently returns
+`{ "success": true }`.
 
 ### `POST /tasks/:taskId/advance`
 
-Development-only endpoint for manually progressing a sample task outside of any Simulation Scenario — useful for ad hoc state changes while poking at the sample with `curl`.
+Development-only endpoint for manually progressing a sample task outside of any
+Simulation Scenario — useful for ad hoc state changes while poking at the sample
+with `curl`.
 
-This endpoint is not part of the Jira remote-agent contract, and it is unrelated to the A2A Simulator: it sets task state directly rather than playing back a scenario.
+This endpoint is not part of the Jira remote-agent contract, and it is unrelated
+to the A2A Simulator: it sets task state directly rather than playing back a
+scenario.
 
 Example body:
 
@@ -173,32 +205,15 @@ Example body:
 }
 ```
 
-The endpoint validates the requested transition using the shared task transition rules from `forge-ahead`.
+The endpoint validates the requested transition using the shared task transition
+rules from `forge-ahead`.
 
 ## JSON-RPC behavior
 
-The JSON-RPC route returns standard JSON-RPC response envelopes:
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": "request-id",
-  "result": {
-    "kind": "task"
-  }
-}
-```
-
-Errors are returned as JSON-RPC errors. The sample maps common task errors to A2A-style codes:
-
-| Error | Code |
-| --- | --- |
-| Task not found | `-32001` |
-| Task cannot be canceled from current state | `-32002` |
-| Context not found | `-32003` |
-| Method not found | `-32601` |
-| Invalid JSON-RPC request | `-32600` |
-| Unhandled server error | `-32603` |
+The JSON-RPC route returns standard JSON-RPC 2.0 envelopes and maps common task
+errors to A2A-style codes. See
+[Reference: A2A JSON-RPC endpoint](../../docs/reference/a2a-json-rpc-endpoint.md#response-envelope)
+for the envelope shape and the full error-code table.
 
 ## Task and context model
 
@@ -208,7 +223,8 @@ The sample stores:
 - tasks by task ID
 - contexts by context ID
 
-A context represents a private user-agent interaction. A task represents one unit of work in that context.
+A context represents a private user-agent interaction. A task represents one
+unit of work in that context.
 
 On `message/send`, the backend:
 
@@ -219,28 +235,38 @@ On `message/send`, the backend:
 5. immediately transitions that task to `working`
 6. returns the formatted task to Jira
 
-The implementation is designed for readability and demo behavior. A real agent should coordinate task state with durable work execution rather than synchronous sample transitions.
+The implementation is designed for readability and demo behavior. A real agent
+should coordinate task state with durable work execution rather than synchronous
+sample transitions.
 
 ## Storage
 
-`src/storage.ts` keeps in-memory maps and mirrors them to a local JSON file under `database/data.json`.
+`src/storage.ts` keeps in-memory maps and mirrors them to a local JSON file
+under `database/data.json`.
 
-This file-backed persistence exists only to make the local development loop easier. It avoids losing installation and task state every time the development server restarts.
+This file-backed persistence exists only to make the local development loop
+easier. It avoids losing installation and task state every time the development
+server restarts.
 
-For production, replace it with durable storage such as PostgreSQL, DynamoDB, MongoDB, Redis, or another datastore appropriate for your agent's task model.
+For production, replace it with durable storage such as PostgreSQL, DynamoDB,
+MongoDB, Redis, or another datastore appropriate for your agent's task model.
 
 ## Authentication and authorization notes
 
-All Forge-originated endpoints should verify FITs. This sample does that through `src/auth.ts` and utilities from `forge-ahead`.
+All Forge-originated endpoints should verify FITs. This sample does that through
+`src/auth.ts` and utilities from `forge-ahead`.
 
 When the Forge manifest enables OAuth token forwarding, Jira task requests can include:
 
 - an app system token for app-attributed calls
 - an app user token for user-attributed calls
 
-For fetching Jira context to process a user's task, prefer the app user token so Jira permissions are respected. Avoid using app system tokens for user-context data unless your service performs equivalent authorization checks.
+For fetching Jira context to process a user's task, prefer the app user token so
+Jira permissions are respected. Avoid using app system tokens for user-context
+data unless your service performs equivalent authorization checks.
 
-Production implementations must also enforce tenant mapping, account mapping if needed, and isolation of memory or cached Jira data by tenant and user.
+Production implementations must also enforce tenant mapping, account mapping if
+needed, and isolation of memory or cached Jira data by tenant and user.
 
 ## Exploring the simulated streaming behavior
 
@@ -250,12 +276,14 @@ There are no manual demo scripts for the streaming flow: the A2A Simulator's
 
 - add or edit files in [`scenarios/`](scenarios/README.md) to see the
   simulator play back different streamed behavior — no TypeScript changes
-  required
+  required; walk through this hands-on in
+  [Tutorial: Edit a Simulation Scenario](../../docs/tutorials/edit-a-simulation-scenario.md)
 - run `npm test` to exercise every scenario end-to-end over the real
   `/a2a/json-rpc` streaming route (see `tests/a2a-json-rpc.test.ts`)
 - to see it through a real Jira interaction, deploy and install the Forge
-  app pointed at this service (see the repository-root README) and assign a
-  work item to the agent
+  app pointed at this service and assign a work item to the agent; see
+  [Tutorial: Run the Sample End-to-End](../../docs/tutorials/run-the-sample-end-to-end.md)
+  for the full verified walkthrough
 
 ## Production gaps
 

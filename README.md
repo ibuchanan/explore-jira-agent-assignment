@@ -1,25 +1,25 @@
 # Forge Remote Agents in Jira
 
-This repository shows 
-how to integrate an **AI agent running on external infrastructure** 
-with **Jira Cloud** 
+This repository shows
+how to integrate an **AI agent running on external infrastructure**
+with **Jira Cloud**
 by using Forge as the installable Atlassian-facing middleware.
 
-Use this sample 
-when your agent runs outside Atlassian's platform 
+Use this sample
+when your agent runs outside Atlassian's platform
 but needs to behave like a Jira participant:
-users can assign it work items, 
-mention it in comments, 
+users can assign it work items,
+mention it in comments,
 and receive task updates in Jira while the agent executes remotely.
 
-> This is a sample implementation for learning and exploration. 
+> This is a sample implementation for learning and exploration.
 > It is not a production-ready SaaS agent.
 
 ## Official docs and EAP status
 
-Remote agents in Jira are available 
-through Atlassian's Forge Early Access Program (EAP). 
-Start with the official docs, 
+Remote agents in Jira are available
+through Atlassian's Forge Early Access Program (EAP).
+Start with the official docs,
 then use this repo as a runnable companion sample:
 
 - [Changelog: Agent2Agent support in Jira][changelog-eap]
@@ -27,13 +27,13 @@ then use this repo as a runnable companion sample:
 - [Reference: `rovo:agentConnector` manifest module][agent-connector-ref]
 - [Forge remotes][forge-remotes]
 
-Because this feature is in EAP, 
-expect eligibility requirements 
-and platform limitations to change. 
-Treat the Atlassian developer docs as the source of truth for 
-current availability, 
-manifest fields, 
-supported transports, 
+Because this feature is in EAP,
+expect eligibility requirements
+and platform limitations to change.
+Treat the Atlassian developer docs as the source of truth for
+current availability,
+manifest fields,
+supported transports,
 and production/Marketplace restrictions.
 
 ## What this repo demonstrates
@@ -41,7 +41,7 @@ and production/Marketplace restrictions.
 After setup, this sample shows how to:
 
 - register a remote agent in Jira with a Forge `rovo:agentConnector` module
-- expose Forge remote endpoints 
+- expose Forge remote endpoints
   that Jira can call for agent installation and task handling
 - receive Forge installation lifecycle events and persist installation metadata
 - handle Agent2Agent-inspired JSON-RPC methods for Jira task interactions:
@@ -49,11 +49,11 @@ After setup, this sample shows how to:
   - `tasks/get`
   - `tasks/cancel`
   - `tasks/resubscribe`
-- track agent contexts, tasks, task states, 
+- track agent contexts, tasks, task states,
   and status messages in a remote backend
-- authenticate incoming Jira-to-remote requests 
+- authenticate incoming Jira-to-remote requests
   with Forge Invocation Tokens (FITs)
-- receive Forge app system and app user tokens 
+- receive Forge app system and app user tokens
   for calling Jira REST APIs from the remote service
 - run a general-purpose A2A Simulator, driven by editable YAML
   Simulation Scenarios, so streamed Remote Agent behavior can be
@@ -78,100 +78,37 @@ Remote backend service
 Your externally hosted AI agent
 ```
 
-The Forge app is deployed to Atlassian's platform 
+The Forge app is deployed to Atlassian's platform
 and acts as the installable integration surface.
-The remote backend is hosted by you 
+The remote backend is hosted by you
 and is responsible for
-agent execution, 
-persistence, 
-tenant mapping, 
-authorization, 
+agent execution,
+persistence,
+tenant mapping,
+authorization,
 and operational behavior.
+
+See [Explanation: Why this sample has three separate layers](docs/explanation/why-three-layers.md)
+for the reasoning behind this split, including why compute can't live in the
+Forge app itself.
 
 ## Quickstart
 
-### 1. Install dependencies
-
-From the repository root:
-
-```bash
-npm install
-```
-
-### 2. Configure the remote backend
-
-Copy the remote environment file:
-
-```bash
-cp apps/remote/.env.example apps/remote/.env
-```
-
-Set the values in `apps/remote/.env`:
-
-```bash
-export PORT=3000
-export HOSTNAME=
-```
-
-`PORT` is the local Express server port. 
-`HOSTNAME` is used by the `zrok` reserved-share script 
-in `apps/remote/package.json`.
-
-### 3. Configure the Forge app
-
-Copy the Forge environment file:
-
-```bash
-cp apps/forge/.env.example apps/forge/.env
-```
-
-Set the values in `apps/forge/.env`:
-
-```bash
-export SITENAME=
-export REMOTE_SERVICE_URL=https://$HOSTNAME.share.zrok.io/
-```
-
-`SITENAME` should be your Jira site name without `.atlassian.net`.
-`REMOTE_SERVICE_URL` must point to the public HTTPS URL for your remote backend.
-
-### 4. Start the remote backend
-
-From the repository root, start the backend server:
-
-```bash
-npm run dev:remote
-```
-
-If you also need the `zrok` tunnel from the remote workspace, 
-run it separately from `apps/remote`:
-
-```bash
-npm run dev:tunnel
-```
-
-The `apps/remote` `dev` script is defined as
-`npm run dev:tunnel && npm run dev:remote`; 
-because the tunnel process is long-running, 
-use separate terminals when you need both the tunnel and backend server.
-
-### 5. Deploy and install the Forge app
-
-From the repository root:
-
-```bash
-npm run forge:deploy
-npm run forge:install
-```
-
-Or run the Forge workspace scripts directly from `apps/forge`:
-
-```bash
-npm run forge:deploy
-npm run forge:install
-```
+1. Install dependencies from the repository root: `npm install`
+2. Copy `apps/remote/.env.example` to `apps/remote/.env` and
+   `apps/forge/.env.example` to `apps/forge/.env`, then fill in `PORT`,
+   `HOSTNAME`, `SITENAME`, and `REMOTE_SERVICE_URL`.
+3. Start the remote backend (`npm run dev:remote`) and, in a second
+   terminal, the tunnel (`npm run dev:tunnel` from `apps/remote`).
+4. Deploy and install the Forge app:
+   `npm run forge:deploy && npm run forge:install`.
 
 Forge commands require valid local environment files and Forge authentication.
+
+This summary skips one prerequisite: reserving a public zrok tunnel address
+before step 2 works. For the complete, verified walkthrough — including
+that step, expected output at each stage, and a first real Jira task — see
+[Tutorial: Run the Sample End-to-End](docs/tutorials/run-the-sample-end-to-end.md).
 
 ## Validate the repo
 
@@ -184,7 +121,7 @@ npm run lint
 npm run typecheck
 ```
 
-If you are only checking the remote backend or shared package, 
+If you are only checking the remote backend or shared package,
 run the relevant workspace script directly.
 
 ## Simulate the sample flow
@@ -195,6 +132,8 @@ demo scripts — see [`apps/remote/scenarios/README.md`](apps/remote/scenarios/R
 for how to add or edit one, and [`apps/remote/README.md`](apps/remote/README.md#exploring-the-simulated-streaming-behavior)
 for how to exercise them (mainly via `npm test`, since `/a2a/json-rpc`
 requires a real Forge Invocation Token that a bare `curl` can't supply).
+Try it hands-on in
+[Tutorial: Edit a Simulation Scenario](docs/tutorials/edit-a-simulation-scenario.md).
 
 ## Repository layout
 
@@ -204,20 +143,28 @@ requires a real Forge Invocation Token that a bare `curl` can't supply).
 │   └── remote/         # Express backend for install and JSON-RPC requests
 ├── packages/
 │   └── forge-ahead/    # Shared Forge, FIT, manifest, and agent helpers
+├── docs/
+│   ├── tutorials/       # learning-oriented lessons
+│   ├── how-to-guides/   # goal-oriented troubleshooting and tasks
+│   ├── reference/       # wire contracts and other lookup facts
+│   ├── explanation/     # design reasoning
+│   └── adr/             # individual architecture decision records
+├── specs/              # provider-neutral feature specs
 └── .atlassian/         # Repository ownership metadata
 ```
 
 ## Key files
 
 - `apps/forge/manifest.yml` — Forge modules, remotes, scopes, and triggers
-- `apps/forge/src/resolvers/agent.ts` — Forge-side JSON-RPC forwarding
 - `apps/remote/src/server.ts` — remote installation and task endpoints
 - `apps/remote/src/auth.ts` — FIT validation middleware for Forge remotes
-- `apps/remote/src/storage.ts` — simple local persistence for sample state
-- `apps/remote/src/scenarios.ts` — Simulation Scenario loading, validation, and matching
-- `apps/remote/src/simulator.ts` — A2A Simulator scenario-step-to-event mapping and playback
 - `apps/remote/scenarios/` — the editable Simulation Scenario YAML files themselves
 - `packages/forge-ahead/src/` — reusable helpers and types used by the sample
+
+See [`apps/forge/README.md`](apps/forge/README.md#source-files) and
+[`apps/remote/README.md`](apps/remote/README.md) for the current, more
+detailed file breakdown for each workspace — internal file names there
+change more often than this list should try to track.
 
 ## Common commands
 
@@ -236,11 +183,25 @@ See `package.json` files for the full script list.
 
 ## Deeper documentation
 
+Workspace READMEs:
+
 - [`apps/forge/README.md`](apps/forge/README.md) explains the sample's
   Forge manifest, modules, scopes, token forwarding, and deployment scripts.
 - [`apps/remote/README.md`](apps/remote/README.md) explains the sample's
   Express service, JSON-RPC handlers, FIT verification, storage, and demo
   endpoints.
+
+Repository docs under [`docs/`](docs/), organized by what you're trying to do:
+
+- Learn by doing: [Run the Sample End-to-End](docs/tutorials/run-the-sample-end-to-end.md),
+  [Edit a Simulation Scenario](docs/tutorials/edit-a-simulation-scenario.md)
+- Get something working: [Diagnose FIT auth failures](docs/how-to-guides/diagnose-fit-auth-failures.md)
+- Look something up: [A2A JSON-RPC endpoint](docs/reference/a2a-json-rpc-endpoint.md)
+- Understand why: [Why this sample has three separate layers](docs/explanation/why-three-layers.md),
+  and the individual decisions in [`docs/adr/`](docs/adr/)
+
+Official Atlassian docs:
+
 - [Integrate remote agents with Jira][remote-agents-guide] is the official
   end-to-end developer guide.
 - [`rovo:agentConnector` module reference][agent-connector-ref] documents
@@ -254,21 +215,21 @@ See `package.json` files for the full script list.
 
 Before adapting this sample for production, plan to add or replace:
 
-- durable database-backed storage for 
+- durable database-backed storage for
   installations, tenants, users, contexts, and tasks
 - tenant mapping and optional account mapping flows
-- production-grade authentication, authorization, audit logging, 
+- production-grade authentication, authorization, audit logging,
   and observability
 - robust task execution and cancellation behavior in your actual agent runtime
 - idempotency for lifecycle events and JSON-RPC retries
 - rate limiting, input validation, and operational safeguards
-- Marketplace-ready installation, upgrade, configuration, 
+- Marketplace-ready installation, upgrade, configuration,
   and support flows if distributing publicly
 
-A production remote agent must preserve 
-Jira's tenancy and permission boundaries. 
-Keep agent context and memory scoped to the user and tenant 
-that initiated the work, 
+A production remote agent must preserve
+Jira's tenancy and permission boundaries.
+Keep agent context and memory scoped to the user and tenant
+that initiated the work,
 and only fetch Jira data the initiating user is allowed to see.
 
 ## Limitations
@@ -279,8 +240,8 @@ Current limitations include:
 - simple file-based persistence in the remote backend
 - sample-oriented task progression behavior
 - simplified operational setup for local development
-- EAP restrictions for `rovo:agentConnector` apps, 
-  including current limits 
+- EAP restrictions for `rovo:agentConnector` apps,
+  including current limits
   on production/staging deployment and Marketplace distribution
 - no complete tenant or account mapping user interface
 - no production agent runtime implementation

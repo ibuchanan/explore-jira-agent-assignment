@@ -4,21 +4,26 @@ This directory holds the A2A Simulator's Simulation Scenarios: human-readable,
 editable YAML files that drive the streamed behavior of a simulated task. You
 can add, edit, or remove scenarios here to create new demonstrations or test
 cases without changing any TypeScript control flow — the simulator (see
-`../src/scenarios.ts` and `../src/simulator.ts`) only interprets the scenario
-data, it never branches on a scenario's identity.
+`../src/scenarios.ts` for loading/matching, `../src/scenarioStepMapper.ts` for
+step-to-event mapping, and `../src/scenarioSession.ts` for playback policy)
+only interprets the scenario data, it never branches on a scenario's identity.
 
 Restart the remote service (`npm run dev:remote`) after editing a `.yaml` file
 here; scenarios are loaded once at startup.
 
+Try it hands-on: [Tutorial: Edit a Simulation Scenario](../../../docs/tutorials/edit-a-simulation-scenario.md)
+walks through editing a step here and watching an automated check react to it.
+
 Related background:
 
 - Vocabulary: [`CONTEXT.md`](../../../CONTEXT.md) — see *A2A Simulator*,
-  *Simulation Scenario*, *Scenario Matching*, *Default Scenario*, and
-  *Compliance Warning*
+  *Simulation Scenario*, *Simulation Scenario Session*, *Scenario Matching*,
+  *Default Scenario*, and *Compliance Warning*
 - Spec: [`specs/streaming-agent-states.md`](../../../specs/streaming-agent-states.md)
 - Design decisions: [`docs/adr/0033`](../../../docs/adr/0033-simulated-agent-uses-editable-scenarios.md),
   [`docs/adr/0037`](../../../docs/adr/0037-scenario-validation-is-structural-not-semantic.md),
-  [`docs/adr/0038`](../../../docs/adr/0038-compliance-warnings-use-problem-details.md)
+  [`docs/adr/0038`](../../../docs/adr/0038-compliance-warnings-use-problem-details.md),
+  [`docs/adr/0039`](../../../docs/adr/0039-simulation-scenario-sessions-use-sans-io-core.md)
 
 ## How a scenario is chosen
 
@@ -130,8 +135,9 @@ npm test
 
 See `../tests/a2a-json-rpc.test.ts` for streaming request/response examples
 against every scenario in this directory, `../tests/scenarios.test.ts` for
-loading/matching/Compliance Warning behavior, and `../tests/simulator.test.ts`
-for step-to-event mapping and playback timing.
+loading/matching/Compliance Warning behavior, `../tests/scenarioStepMapper.test.ts`
+for step-to-event mapping, and `../tests/scenarioSession.test.ts` for playback
+and resumption policy.
 
 ## Current scenarios
 
