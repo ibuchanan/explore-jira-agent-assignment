@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import type { Artifact } from "../../src/rovo/agentConnector";
+import type { Artifact } from "../../src/rovo/a2aContract";
 import {
   mapRemoteAgentSignal,
   type RemoteAgentSignal,

@@ -11,26 +11,26 @@
  */
 
 import { describe, expect, it } from "vitest";
-import type {
-  JsonRpcRequest,
-  JsonRpcResponse,
-} from "../../src/rovo/agentConnector";
 import {
   ACTIVE_TASK_STATES,
-  formatAgentConnectorTaskResponse,
   getAllowedTransitions,
   isActiveState,
   isTerminalState,
-  isValidAgentConnectorResponse,
-  isValidStreamResponse,
   isValidTransition,
   TASK_STATE_TRANSITIONS,
   type Task,
   TERMINAL_TASK_STATES,
-} from "../../src/rovo/agentConnector";
+} from "../../src/rovo/a2aContract";
+import { formatAgentConnectorTaskResponse } from "../../src/rovo/agentConnectorFormatting";
+import type { AgentConnectorRequest } from "../../src/rovo/agentConnectorMethods";
+import {
+  isValidAgentConnectorResponse,
+  isValidStreamResponse,
+} from "../../src/rovo/agentConnectorValidation";
+import type { JsonRpcResponse } from "../../src/util/jsonrpc";
 
-// Type-only import retained for Protocol Compliance test below — it ensures
-// the JsonRpcRequest type enforces taskId (not id) for tasks/get at compile time.
+// Type-only import retained for Protocol Compliance tests below. It keeps the
+// documented taskId-only method params close to the behavioral assertions.
 
 // Minimal valid Task fixture reused across tests
 const makeTask = (
@@ -390,7 +390,7 @@ describe("A2A Protocol — behavioural tests", () => {
       // This test encodes the fix for the production bug that caused:
       // "I couldn't finish working because of a technical problem on my end"
       // The old implementation incorrectly sent { id, historyLength } instead of { taskId }.
-      const correctRequest: JsonRpcRequest = {
+      const correctRequest: AgentConnectorRequest = {
         jsonrpc: "2.0",
         id: 1,
         method: "tasks/get",
@@ -409,7 +409,7 @@ describe("A2A Protocol — behavioural tests", () => {
     });
 
     it("tasks/get params should not include historyLength", () => {
-      const request: JsonRpcRequest = {
+      const request: AgentConnectorRequest = {
         jsonrpc: "2.0",
         id: "req-2",
         method: "tasks/get",

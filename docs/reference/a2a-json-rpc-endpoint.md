@@ -31,11 +31,11 @@ streamed event kinds, and error codes. Implemented in
 | --- | --- | --- | --- |
 | `message/send` | Polling (default `Accept`) | Message payload, optional `contextId`, optional `taskId` for resumption | A `Task` object |
 | `message/send` | Streaming (`Accept: text/event-stream`) | Same as above | Stream of `task-state-update`, `content-update`, and `artifact-update` events |
-| `tasks/get` | Polling | `id` or `taskId` | A `Task` object |
-| `tasks/cancel` | Polling | `id` or `taskId` | A `Task` object in a terminal state |
-| `tasks/resubscribe` | Streaming | `id` or `taskId` | Current task snapshot, then remaining events for an active task |
+| `tasks/get` | Polling | `taskId` | A `Task` object |
+| `tasks/cancel` | Polling | `taskId` | A `Task` object in a terminal state |
+| `tasks/resubscribe` | Streaming | `taskId` | Current task snapshot, then remaining events for an active task |
 
-`tasks/get` and `tasks/cancel` accept either `id` or `taskId` in params.
+`tasks/get`, `tasks/cancel`, and `tasks/resubscribe` use the `taskId` param.
 
 ## Task object
 

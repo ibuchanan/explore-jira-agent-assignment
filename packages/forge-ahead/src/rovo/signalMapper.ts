@@ -12,7 +12,7 @@
  * @see specs/tickets/02-provider-neutral-signal-mapping.md
  */
 
-import type { Artifact, TaskState } from "./agentConnector";
+import type { Artifact, TaskState } from "./a2aContract";
 
 export type RemoteAgentSignal =
   | { category: "runtime-started" }

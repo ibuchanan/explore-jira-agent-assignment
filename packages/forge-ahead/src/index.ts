@@ -43,46 +43,46 @@ export type {
   RovoEvent,
   RovoResponse,
 } from "./rovo/action";
-// Re-export Agent2Agent (A2A) protocol types
-// Re-export Agent Connector types and utilities
+// Re-export Agent2Agent (A2A) protocol contract
 export type {
-  AdvanceTaskRequest,
-  AdvanceTaskResponse,
-  AgentConnectorDatabaseSchema,
-  AgentConnectorRequest,
-  AgentConnectorResponse,
-  AgentContext,
   Artifact,
-  CancelTaskParams,
-  CancelTaskParams as AgentConnectorCancelTaskParams,
-  GetTaskParams,
-  GetTaskParams as AgentConnectorGetTaskParams,
-  JiraInstallation,
   Message,
   MessagePart,
-  ResubscribeTaskParams,
-  ResubscribeTaskParams as AgentConnectorResubscribeTaskParams,
-  SendMessageParams,
-  SendMessageParams as AgentConnectorSendMessageParams,
   StreamResponse,
   Task,
   TaskArtifactUpdateEvent,
   TaskState,
   TaskStatusUpdateEvent,
-} from "./rovo/agentConnector";
-// Re-export Agent2Agent (A2A) protocol utilities
+} from "./rovo/a2aContract";
 export {
   ACTIVE_TASK_STATES,
-  formatAgentConnectorTaskResponse,
   getAllowedTransitions,
   isActiveState,
   isTerminalState,
-  isValidAgentConnectorResponse,
-  isValidStreamResponse,
   isValidTransition,
   TASK_STATE_TRANSITIONS,
   TERMINAL_TASK_STATES,
-} from "./rovo/agentConnector";
+} from "./rovo/a2aContract";
+// Re-export Agent Connector JSON-RPC method contract
+export type {
+  AgentConnectorMethod,
+  AgentConnectorRequest,
+  AgentConnectorResponse,
+  CancelTaskParams,
+  CancelTaskParams as AgentConnectorCancelTaskParams,
+  GetTaskParams,
+  GetTaskParams as AgentConnectorGetTaskParams,
+  ResubscribeTaskParams,
+  ResubscribeTaskParams as AgentConnectorResubscribeTaskParams,
+  SendMessageParams,
+  SendMessageParams as AgentConnectorSendMessageParams,
+} from "./rovo/agentConnectorMethods";
+// Re-export Agent Connector formatting and validation utilities
+export { formatAgentConnectorTaskResponse } from "./rovo/agentConnectorFormatting";
+export {
+  isValidAgentConnectorResponse,
+  isValidStreamResponse,
+} from "./rovo/agentConnectorValidation";
 // Re-export provider-neutral Remote Agent Signal mapping types and utilities
 export type { MappedEvent, RemoteAgentSignal } from "./rovo/signalMapper";
 export { mapRemoteAgentSignal } from "./rovo/signalMapper";
