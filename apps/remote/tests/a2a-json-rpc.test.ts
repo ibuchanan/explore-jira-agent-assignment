@@ -1345,3 +1345,169 @@ describe("A2A JSON-RPC cancellation ordering", () => {
     expect(cancelResult?.status.state).toBe("canceled");
   });
 });
+
+describe("A2A JSON-RPC tasks/resubscribe lifecycle", () => {
+  beforeEach(() => {
+    validateAuthHeader.mockReset();
+    validateAuthHeader.mockResolvedValue({
+      isErr: () => false,
+      value: fitPayload,
+    });
+    tasks.clear();
+    contexts.clear();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function codingAgentMessageSendParams(): typeof messageSendParams {
+    return {
+      ...messageSendParams,
+      message: {
+        ...messageSendParams.message,
+        parts: [{ text: "Fix the login bug.", kind: "text" }],
+      },
+    };
+  }
+
+  type TaskEnvelope = {
+    result: {
+      task: {
+        id: string;
+        contextId: string;
+        status: { state: string; message?: { parts: Array<{ text: string }> } };
+      };
+    };
+  };
+  type StatusUpdateEnvelope = {
+    result: {
+      statusUpdate?: {
+        status: { state: string };
+        message?: { parts: Array<{ text: string }> };
+        final: boolean;
+      };
+    };
+  };
+  type ArtifactUpdateEnvelope = {
+    result: {
+      artifactUpdate?: {
+        artifact: { artifactId: string };
+        lastChunk?: boolean;
+      };
+    };
+  };
+
+  it("continues streaming remaining scenario steps after resubscribe instead of replaying steps already streamed on the prior connection", async () => {
+    let resubscribeEvents: unknown[] = [];
+
+    const primaryEvents = await postJsonRpcStreamingWithSideEffect(
+      {
+        jsonrpc: "2.0",
+        id: "req-stream-resubscribe",
+        method: "message/send",
+        params: codingAgentMessageSendParams(),
+      },
+      {
+        matches: (event) =>
+          (event as ArtifactUpdateEnvelope).result.artifactUpdate?.artifact
+            .artifactId === "patch-1" &&
+          (event as ArtifactUpdateEnvelope).result.artifactUpdate?.lastChunk ===
+            true,
+        onMatch: async (_event, taskId) => {
+          resubscribeEvents = await postJsonRpcStreaming({
+            jsonrpc: "2.0",
+            id: "req-resubscribe",
+            method: "tasks/resubscribe",
+            params: { taskId },
+          });
+        },
+      },
+    );
+
+    const primaryTask = (primaryEvents[0] as TaskEnvelope).result.task;
+
+    // The prior connection is superseded at the resubscribe point - it must
+    // not also receive the steps that stream on the resubscribed connection.
+    const primaryToolMessages = primaryEvents.filter((event) =>
+      (
+        event as StatusUpdateEnvelope
+      ).result.statusUpdate?.message?.parts[0]?.text.includes("Tool:"),
+    );
+    expect(primaryToolMessages).toHaveLength(0);
+    const primaryCompletedCount = primaryEvents.filter(
+      (event) =>
+        (event as StatusUpdateEnvelope).result.statusUpdate?.status.state ===
+        "completed",
+    ).length;
+    expect(primaryCompletedCount).toBe(0);
+
+    // The resubscribed connection's first event is the current task snapshot,
+    // not a restart of the scenario from its first step.
+    const resubscribeSnapshot = resubscribeEvents[0] as TaskEnvelope;
+    expect(resubscribeSnapshot.result.task.id).toBe(primaryTask.id);
+    expect(resubscribeSnapshot.result.task.status.state).toBe("working");
+
+    // It then picks up with the remaining steps, ending in the scenario's
+    // actual completion rather than replaying steps already streamed.
+    const resubscribeToolMessages = resubscribeEvents.filter((event) =>
+      (
+        event as StatusUpdateEnvelope
+      ).result.statusUpdate?.message?.parts[0]?.text.includes("Tool:"),
+    );
+    expect(resubscribeToolMessages).toHaveLength(1);
+
+    const resubscribeCompleted = resubscribeEvents.filter(
+      (event) =>
+        (event as StatusUpdateEnvelope).result.statusUpdate?.status.state ===
+        "completed",
+    );
+    expect(resubscribeCompleted).toHaveLength(1);
+    expect(
+      (resubscribeCompleted[0] as StatusUpdateEnvelope).result.statusUpdate
+        ?.final,
+    ).toBe(true);
+
+    // Every patch-1 chunk streamed exactly once across both connections combined.
+    const allEvents = [...primaryEvents, ...resubscribeEvents];
+    const patchChunks = allEvents.filter(
+      (event) =>
+        (event as ArtifactUpdateEnvelope).result.artifactUpdate?.artifact
+          .artifactId === "patch-1",
+    );
+    expect(patchChunks).toHaveLength(2);
+  });
+
+  it("closes the resubscribed stream after reporting the current auth-required pause, without auto-continuing past it", async () => {
+    const pausedEvents = await postJsonRpcStreaming({
+      jsonrpc: "2.0",
+      id: "req-stream-auth-required",
+      method: "message/send",
+      params: {
+        ...messageSendParams,
+        message: {
+          ...messageSendParams.message,
+          parts: [{ text: "Push the hotfix to the repository.", kind: "text" }],
+        },
+      },
+    });
+    const pausedTask = (pausedEvents[0] as TaskEnvelope).result.task;
+
+    const resubscribeEvents = await postJsonRpcStreaming({
+      jsonrpc: "2.0",
+      id: "req-resubscribe-paused",
+      method: "tasks/resubscribe",
+      params: { taskId: pausedTask.id },
+    });
+
+    expect(resubscribeEvents).toHaveLength(1);
+    const snapshot = resubscribeEvents[0] as TaskEnvelope;
+    expect(snapshot.result.task.status.state).toBe("auth-required");
+    expect(snapshot.result.task.status.message?.parts[0]?.text).toContain(
+      "Approval required:",
+    );
+  });
+});

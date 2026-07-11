@@ -573,8 +573,10 @@ function buildStreamResponseFromEvent(
  * response once a step is final or waits for user input.
  *
  * `allSteps` is the matched scenario's full, unsliced step list (stable
- * object references), used only to record `pausedAtStepIndex` so a later
- * resumption knows where to continue (see docs/adr/0015).
+ * object references), used to record `nextStepIndex` after every applied
+ * step - not only at a pause - so a later message/send resumption or
+ * `tasks/resubscribe` knows where to continue without replaying steps
+ * already streamed (see docs/adr/0006 and docs/adr/0015).
  */
 function streamScenarioSteps(
   res: import("express").Response,
@@ -585,9 +587,7 @@ function streamScenarioSteps(
   steps: ScenarioStep[],
 ): void {
   const playback = runScenario(steps, (event, step) => {
-    if (step.waitForUserInput) {
-      task.pausedAtStepIndex = allSteps.indexOf(step) + 1;
-    }
+    task.nextStepIndex = allSteps.indexOf(step) + 1;
     applyMappedEventToTask(event, task, context);
     writeSseEvent(res, requestId, buildStreamResponseFromEvent(event, task));
 
@@ -621,8 +621,13 @@ function streamScenarioSteps(
  *
  * An artifact-update step can't be a task's status, so it is left in the
  * returned remaining steps instead of being folded.
+ *
+ * `allSteps` is the matched scenario's full, unsliced step list, used to
+ * record `nextStepIndex` for the folded step the same way `streamScenarioSteps`
+ * does for streamed steps.
  */
 function foldLeadingStep(
+  allSteps: ScenarioStep[],
   steps: ScenarioStep[],
   task: Task,
   context: AgentContext,
@@ -637,6 +642,7 @@ function foldLeadingStep(
     return { remaining: steps };
   }
 
+  task.nextStepIndex = allSteps.indexOf(firstStep) + 1;
   applyMappedEventToTask(firstMapped, task, context);
   return { remaining: rest, folded: firstStep };
 }
@@ -720,7 +726,12 @@ async function handleSendStreamingMessage(
     scenarioId: scenario.id,
   } satisfies Task;
 
-  const { remaining, folded } = foldLeadingStep(scenario.steps, task, context);
+  const { remaining, folded } = foldLeadingStep(
+    scenario.steps,
+    scenario.steps,
+    task,
+    context,
+  );
 
   tasks.set(taskId, task);
   saveData();
@@ -779,15 +790,21 @@ async function handleResumeStreamingMessage(
     throw new Error("Scenario not found for resumed task");
   }
 
-  const pausedSteps = scenario.steps.slice(task.pausedAtStepIndex ?? 0);
-  const { remaining, folded } = foldLeadingStep(pausedSteps, task, context);
+  const resumedAtStepIndex = task.nextStepIndex ?? 0;
+  const pausedSteps = scenario.steps.slice(resumedAtStepIndex);
+  const { remaining, folded } = foldLeadingStep(
+    scenario.steps,
+    pausedSteps,
+    task,
+    context,
+  );
 
   saveData();
 
   console.log("Streaming task resumed:", {
     taskId: task.id,
     scenarioId: scenario.id,
-    resumedAtStepIndex: task.pausedAtStepIndex ?? 0,
+    resumedAtStepIndex,
   });
 
   res.setHeader("Content-Type", "text/event-stream");
@@ -846,34 +863,44 @@ async function handleTasksResubscribe(
     state: task.status.state,
   });
 
-  // If already in terminal state, close immediately
+  // A terminal task has nothing further to stream. A task paused at
+  // auth-required/input-required also has nothing further to stream until
+  // the user responds via message/send (see docs/adr/0036) - resubscribing
+  // must not auto-continue past that pause on its own. Both cases close
+  // immediately after reporting the current snapshot.
   if (
-    task.status.state === "completed" ||
-    task.status.state === "failed" ||
-    task.status.state === "canceled" ||
-    task.status.state === "rejected"
+    isTerminalState(task.status.state) ||
+    isResumableState(task.status.state)
   ) {
     res.end();
     return;
   }
 
-  // Task still active — resume streaming.
-  // Note: this replays the matched scenario's steps from the beginning
-  // rather than resuming from where the prior connection left off, matching
-  // the pre-existing (and still unresolved) resubscribe behavior. Proper
-  // resubscribe replay is tracked separately (see specs/tickets/12-*.md).
+  // Task still active — take over any still-open prior connection for this
+  // task so it doesn't keep streaming in parallel with this one, then
+  // continue the matched Simulation Scenario from the next step that hasn't
+  // been applied yet, rather than replaying steps already streamed (see
+  // docs/adr/0006).
+  const priorStream = activeScenarioStreams.get(taskId);
+  if (priorStream) {
+    priorStream.cancelPlayback();
+    activeScenarioStreams.delete(taskId);
+    priorStream.res.end();
+  }
+
   const context = contexts.get(task.contextId);
   const scenario = scenarios.find(
     (candidate) => candidate.id === task.scenarioId,
   );
   if (context && scenario) {
+    const remaining = scenario.steps.slice(task.nextStepIndex ?? 0);
     streamScenarioSteps(
       res,
       requestId,
       task,
       context,
       scenario.steps,
-      scenario.steps,
+      remaining,
     );
   } else {
     res.end();

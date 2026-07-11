@@ -21,8 +21,13 @@ export type Task = BaseTask & {
   contextId: string;
   /** Simulation Scenario id matched for this task's streamed execution. */
   scenarioId?: string;
-  /** Index into the matched scenario's steps to resume from after a pause. */
-  pausedAtStepIndex?: number;
+  /**
+   * Index into the matched scenario's steps to continue from - the next
+   * step that hasn't been applied yet. Updated after every applied step, not
+   * only at a pause, so both message/send resumption and tasks/resubscribe
+   * can continue playback without replaying already-streamed steps.
+   */
+  nextStepIndex?: number;
 };
 
 // ============================================================================
