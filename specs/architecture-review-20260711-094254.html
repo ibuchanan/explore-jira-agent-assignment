@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Architecture review - explore-jira-agent-assignment</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({
+        startOnLoad: true,
+        theme: "neutral",
+        securityLevel: "loose",
+        flowchart: { curve: "basis", padding: 12 },
+      });
+    </script>
+    <style>
+      body { background: #fafaf9; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); color: white; }
+      .seam { border-style: dashed; }
+      .leak { color: #dc2626; border-color: #dc2626; }
+      .mini-label { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+      .thin-band { min-height: 38px; }
+      .thick-band { min-height: 128px; }
+      .mass-interface { background: #fee2e2; border-color: #ef4444; }
+      .mass-impl { background: #e0f2fe; border-color: #0284c7; }
+      code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    </style>
+  </head>
+  <body class="text-slate-900 antialiased">
+    <main class="mx-auto max-w-6xl space-y-10 px-6 py-10">
+      <header class="space-y-6">
+        <div>
+          <p class="text-xs uppercase tracking-wider text-slate-500">Architecture review</p>
+          <h1 class="mt-2 text-4xl font-semibold tracking-tight">explore-jira-agent-assignment</h1>
+          <p class="mt-2 text-sm text-slate-600">Generated 2026-07-11. Focus: remaining deepening opportunities after <code>e561981</code> extracted Simulation Scenario Sessions.</p>
+        </div>
+        <div class="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm sm:grid-cols-4">
+          <div class="flex items-center gap-2"><span class="h-5 w-10 rounded border border-slate-300 bg-slate-50"></span> solid box = module</div>
+          <div class="flex items-center gap-2"><span class="h-5 w-10 rounded border-2 border-dashed border-slate-400"></span> dashed line = seam</div>
+          <div class="flex items-center gap-2"><span class="h-1 w-10 bg-red-600"></span> red = leakage</div>
+          <div class="flex items-center gap-2"><span class="h-5 w-10 rounded deep"></span> dark box = deep module</div>
+        </div>
+        <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
+          <strong>Previous review accounted for:</strong> "Deepen the Simulation Scenario session" is now done. The new report does not re-suggest it. ADR 0039 also defers a full Scenario Catalog, so scenario authoring suggestions stay inside the current remote app.
+        </div>
+      </header>
+
+      <section id="candidates" class="space-y-8">
+        <article id="stream-adapter" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div class="flex flex-wrap items-center gap-3">
+            <h2 class="text-2xl font-semibold">Deepen the A2A-visible stream adapter</h2>
+            <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">Strong</span>
+            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">ports &amp; adapters</span>
+          </div>
+          <div class="mt-4 grid gap-6 lg:grid-cols-[1fr_1.05fr]">
+            <div class="space-y-4">
+              <div>
+                <p class="mini-label text-slate-500">Files</p>
+                <p class="mt-1 font-mono text-sm text-slate-700">apps/remote/src/server.ts</p>
+                <p class="font-mono text-sm text-slate-700">apps/remote/tests/a2a-json-rpc.test.ts</p>
+                <p class="font-mono text-sm text-slate-700">packages/forge-ahead/src/rovo/signalMapper.ts</p>
+                <p class="font-mono text-sm text-slate-700">packages/forge-ahead/src/rovo/agentConnector.ts</p>
+              </div>
+              <div class="grid gap-3 text-sm sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+                <div><p class="mini-label text-slate-500">Problem</p><p class="mt-1">Transport interface knowledge leaks through server handlers and tests: SSE headers, JSON-RPC frames, error frames, mapped-event formatting, closing, and stream parsing.</p></div>
+                <div><p class="mini-label text-slate-500">Solution</p><p class="mt-1">Make one stream adapter module own A2A-visible event formatting and SSE JSON-RPC framing while lifecycle modules emit domain-shaped events.</p></div>
+                <div><p class="mini-label text-slate-500">Wins</p><ul class="mt-1 list-disc space-y-1 pl-4"><li>locality: wire rules concentrate</li><li>leverage: one adapter, many handlers</li><li>tests cross same seam</li><li>transport stops leaking</li></ul></div>
+              </div>
+              <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">Supports ADR 0022: transport stays separate from state mapping. The mapper still does not learn SSE.</div>
+            </div>
+            <div class="grid gap-4 md:grid-cols-2">
+              <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <p class="mini-label mb-3 text-slate-500">Before</p>
+                <pre class="mermaid">
+flowchart TB
+  Server[server.ts]
+  Types[local StreamResponse types]
+  Format[build stream response]
+  Frame[write data frame]
+  Error[manual error frame]
+  Test[test SSE parser]
+  Server --> Types
+  Server --> Format
+  Server --> Frame
+  Server --> Error
+  Test -.leak.-> Frame
+  Format -.leak.-> Types
+  Error -.leak.-> Frame
+  classDef leak stroke:#dc2626,stroke-width:2px,color:#dc2626;
+  class Test,Format,Error leak
+                </pre>
+              </div>
+              <div class="rounded-lg border border-slate-200 bg-white p-4">
+                <p class="mini-label mb-3 text-slate-500">After</p>
+                <pre class="mermaid">
+flowchart TB
+  Handlers[JSON-RPC handlers]
+  Session[Simulation Scenario Session]
+  Adapter[A2A-visible stream adapter]
+  Express[Express Response adapter]
+  Test[Test reader adapter]
+  Contract[StreamResponse contract]
+  Handlers --> Adapter
+  Session --> Adapter
+  Adapter --> Express
+  Adapter --> Test
+  Adapter --> Contract
+  classDef deep fill:#0f172a,stroke:#0f172a,color:#fff;
+  class Adapter deep
+                </pre>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article id="legacy-playback" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div class="flex flex-wrap items-center gap-3">
+            <h2 class="text-2xl font-semibold">Retire the second playback module</h2>
+            <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">Strong</span>
+            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">in-process</span>
+          </div>
+          <div class="mt-4 grid gap-6 lg:grid-cols-[.95fr_1.05fr]">
+            <div class="space-y-4">
+              <div>
+                <p class="mini-label text-slate-500">Files</p>
+                <p class="mt-1 font-mono text-sm text-slate-700">apps/remote/src/simulator.ts</p>
+                <p class="font-mono text-sm text-slate-700">apps/remote/src/scenarioSession.ts</p>
+                <p class="font-mono text-sm text-slate-700">apps/remote/tests/simulator.test.ts</p>
+                <p class="font-mono text-sm text-slate-700">apps/remote/tests/scenarioSession.test.ts</p>
+              </div>
+              <div class="grid gap-3 text-sm sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+                <div><p class="mini-label text-slate-500">Problem</p><p class="mt-1"><code>runScenario</code> is now production-unused playback policy, while the Session core owns cursor, delay, pause, resume, resubscribe, and cancel policy.</p></div>
+                <div><p class="mini-label text-slate-500">Solution</p><p class="mt-1">Keep the step-to-event implementation, but remove or rename the obsolete playback module so there is one place to understand Session execution.</p></div>
+                <div><p class="mini-label text-slate-500">Wins</p><ul class="mt-1 list-disc space-y-1 pl-4"><li>locality: one playback policy</li><li>deletion test passes</li><li>fewer stale tests</li><li>Session keeps depth</li></ul></div>
+              </div>
+              <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950">Aligns with ADR 0039: Session policy belongs in the sans-IO core.</div>
+            </div>
+            <div class="grid gap-4 md:grid-cols-2">
+              <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <p class="mini-label mb-3 text-slate-500">Before</p>
+                <div class="space-y-3">
+                  <div class="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">simulator.ts<br /><span class="text-xs">runScenario: timers + stop rules</span></div>
+                  <div class="rounded border border-slate-300 bg-white p-3 text-sm">scenarioSession.ts<br /><span class="text-xs">effects + cursor + stop rules</span></div>
+                  <div class="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">simulator.test.ts<br /><span class="text-xs">tests old playback</span></div>
+                </div>
+              </div>
+              <div class="rounded-lg border border-slate-200 bg-white p-4">
+                <p class="mini-label mb-3 text-slate-500">After</p>
+                <div class="rounded-lg border-2 border-slate-900 bg-slate-900 p-4 text-white">
+                  <p class="mini-label text-slate-300">Simulation Scenario Session</p>
+                  <div class="mt-4 rounded border border-slate-600 p-3 text-sm">cursor, delays, pause, resume, resubscribe, cancel</div>
+                  <div class="mt-3 rounded border border-slate-600 p-3 text-sm">internal step-to-event mapper</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article id="scenario-diagnostics" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div class="flex flex-wrap items-center gap-3">
+            <h2 class="text-2xl font-semibold">Split Scenario parsing from diagnostics</h2>
+            <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Worth exploring</span>
+            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">local-substitutable</span>
+          </div>
+          <div class="mt-4 grid gap-6 lg:grid-cols-[1fr_1fr]">
+            <div class="space-y-4">
+              <div>
+                <p class="mini-label text-slate-500">Files</p>
+                <p class="mt-1 font-mono text-sm text-slate-700">apps/remote/src/scenarios.ts</p>
+                <p class="font-mono text-sm text-slate-700">apps/remote/tests/scenarios.test.ts</p>
+                <p class="font-mono text-sm text-slate-700">apps/remote/scenarios/README.md</p>
+              </div>
+              <div class="grid gap-3 text-sm sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+                <div><p class="mini-label text-slate-500">Problem</p><p class="mt-1"><code>loadScenarios</code> mixes filesystem, YAML parsing, structural validation, Compliance Warning creation, console logging, sorting, and Default Scenario fallback expectations.</p></div>
+                <div><p class="mini-label text-slate-500">Solution</p><p class="mt-1">Put pure Scenario parsing and diagnostics behind one module, with filesystem and console output as adapters at the edge.</p></div>
+                <div><p class="mini-label text-slate-500">Wins</p><ul class="mt-1 list-disc space-y-1 pl-4"><li>locality: authoring rules</li><li>tests stop spying console</li><li>warning policy stays pure</li><li>loader becomes adapter</li></ul></div>
+              </div>
+              <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Do not promote a full Scenario Catalog yet. ADR 0039 explicitly defers that seam until another consumer or stronger discovery need exists.</div>
+            </div>
+            <div class="grid gap-4 md:grid-cols-2">
+              <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <p class="mini-label mb-3 text-slate-500">Before</p>
+                <div class="space-y-2">
+                  <div class="thin-band rounded border border-slate-300 bg-white px-3 py-2 text-sm">read directory</div>
+                  <div class="thin-band rounded border border-slate-300 bg-white px-3 py-2 text-sm">parse YAML</div>
+                  <div class="thin-band rounded border border-slate-300 bg-white px-3 py-2 text-sm">validate structure</div>
+                  <div class="thin-band rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">create Compliance Warning</div>
+                  <div class="thin-band rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">console.warn in core path</div>
+                </div>
+              </div>
+              <div class="rounded-lg border border-slate-200 bg-white p-4">
+                <p class="mini-label mb-3 text-slate-500">After</p>
+                <div class="rounded-lg border-2 border-slate-900 p-4">
+                  <div class="rounded deep p-4 text-center text-sm font-semibold">Scenario parsing and diagnostics</div>
+                  <div class="mt-4 grid gap-2 text-sm text-slate-600">
+                    <div class="rounded border border-slate-200 bg-slate-50 p-2">pure parse result</div>
+                    <div class="rounded border border-slate-200 bg-slate-50 p-2">Problem Details diagnostics</div>
+                    <div class="rounded border border-slate-200 bg-slate-50 p-2">filesystem + console adapters outside</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article id="message-intake" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div class="flex flex-wrap items-center gap-3">
+            <h2 class="text-2xl font-semibold">Deepen message intake for Scenario Matching</h2>
+            <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Worth exploring</span>
+            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">in-process</span>
+          </div>
+          <div class="mt-4 grid gap-6 lg:grid-cols-[.95fr_1.05fr]">
+            <div class="space-y-4">
+              <div>
+                <p class="mini-label text-slate-500">Files</p>
+                <p class="mt-1 font-mono text-sm text-slate-700">apps/remote/src/server.ts</p>
+                <p class="font-mono text-sm text-slate-700">apps/remote/src/scenarios.ts</p>
+                <p class="font-mono text-sm text-slate-700">apps/remote/tests/a2a-json-rpc.test.ts</p>
+              </div>
+              <div class="grid gap-3 text-sm sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+                <div><p class="mini-label text-slate-500">Problem</p><p class="mt-1">A2A message parsing, context creation, history writes, task text extraction, and Scenario Matching input are split across private server helpers and the matcher still only sees text.</p></div>
+                <div><p class="mini-label text-slate-500">Solution</p><p class="mt-1">Move incoming message normalization into one module that produces context updates and deterministic Scenario Matching input.</p></div>
+                <div><p class="mini-label text-slate-500">Wins</p><ul class="mt-1 list-disc space-y-1 pl-4"><li>locality: intake casts vanish</li><li>structured context unlocks</li><li>matcher interface shrinks</li><li>resume rule stays visible</li></ul></div>
+              </div>
+              <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">Preserves ADR 0036: follow-up user input still resumes paused tasks; the module only makes that input explicit.</div>
+            </div>
+            <div class="grid gap-4 md:grid-cols-2">
+              <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <p class="mini-label mb-3 text-slate-500">Before</p>
+                <pre class="mermaid">
+flowchart TB
+  Server[server.ts]
+  Data[extractDataFields]
+  Text[extractTaskText]
+  Record[recordUserMessages]
+  Context[contexts map]
+  Match[matchScenario text only]
+  Server --> Data
+  Server --> Text
+  Server --> Record
+  Server --> Context
+  Text -.leak.-> Match
+  Data -.gap.-> Match
+  classDef leak stroke:#dc2626,stroke-width:2px,color:#dc2626;
+  class Text,Data leak
+                </pre>
+              </div>
+              <div class="rounded-lg border border-slate-200 bg-white p-4">
+                <p class="mini-label mb-3 text-slate-500">After</p>
+                <pre class="mermaid">
+flowchart TB
+  Handler[message/send handler]
+  Intake[Message intake module]
+  Store[(context store)]
+  Match[Scenario Matching]
+  Handler --> Intake
+  Intake --> Store
+  Intake --> Match
+  classDef deep fill:#0f172a,stroke:#0f172a,color:#fff;
+  class Intake deep
+                </pre>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article id="shared-contract" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div class="flex flex-wrap items-center gap-3">
+            <h2 class="text-2xl font-semibold">Thin the shared A2A contract module</h2>
+            <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Worth exploring</span>
+            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">in-process</span>
+          </div>
+          <div class="mt-4 grid gap-6 lg:grid-cols-[1fr_1fr]">
+            <div class="space-y-4">
+              <div>
+                <p class="mini-label text-slate-500">Files</p>
+                <p class="mt-1 font-mono text-sm text-slate-700">packages/forge-ahead/src/rovo/agentConnector.ts</p>
+                <p class="font-mono text-sm text-slate-700">packages/forge-ahead/src/index.ts</p>
+                <p class="font-mono text-sm text-slate-700">packages/forge-ahead/package.json</p>
+              </div>
+              <div class="grid gap-3 text-sm sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+                <div><p class="mini-label text-slate-500">Problem</p><p class="mt-1">One shared module mixes A2A task and stream contract, JSON-RPC method params, demo advance shapes, installation/context storage guidance, validators, and formatters.</p></div>
+                <div><p class="mini-label text-slate-500">Solution</p><p class="mt-1">Keep the protocol contract deep, but move sample-storage guidance and demo-only shapes away from the contract interface.</p></div>
+                <div><p class="mini-label text-slate-500">Wins</p><ul class="mt-1 list-disc space-y-1 pl-4"><li>interface stops widening</li><li>imports express intent</li><li>unknown state gets revisited</li><li>leverage for both apps</li></ul></div>
+              </div>
+              <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">Supports ADR 0022. Watch the <code>unknown</code> mismatch: code treats it as active/transitionable while the domain model calls it exceptional.</div>
+            </div>
+            <div class="grid gap-4 md:grid-cols-2">
+              <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <p class="mini-label mb-3 text-slate-500">Before</p>
+                <div class="grid grid-cols-2 gap-3">
+                  <div class="rounded border mass-interface p-3 text-center text-xs font-semibold text-red-900">wide interface<br />types, params, storage, validators, demo</div>
+                  <div class="rounded border mass-impl p-3 text-center text-xs font-semibold text-sky-900">mixed implementation<br />formatters, zod, constants</div>
+                </div>
+                <div class="mt-4 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">Deletion breaks unrelated concepts together.</div>
+              </div>
+              <div class="rounded-lg border border-slate-200 bg-white p-4">
+                <p class="mini-label mb-3 text-slate-500">After</p>
+                <div class="space-y-3">
+                  <div class="rounded-lg border-2 border-slate-900 bg-slate-900 p-4 text-white">
+                    <p class="mini-label text-slate-300">A2A contract module</p>
+                    <p class="mt-2 text-sm">Task, stream, transition, formatter</p>
+                  </div>
+                  <div class="grid grid-cols-2 gap-3 text-xs text-slate-600">
+                    <div class="rounded border border-slate-200 bg-slate-50 p-2">sample storage shapes</div>
+                    <div class="rounded border border-slate-200 bg-slate-50 p-2">demo advance shapes</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section id="top-recommendation" class="rounded-xl border-2 border-slate-900 bg-white p-6 shadow-sm">
+        <p class="mini-label text-slate-500">Top recommendation</p>
+        <h2 class="mt-2 text-2xl font-semibold"><a class="text-indigo-700 underline" href="#stream-adapter">Deepen the A2A-visible stream adapter</a></h2>
+        <p class="mt-3 text-slate-700">The Session module now has depth; the next leakage is the seam where Session effects become A2A-visible stream responses. Deepening that adapter gives the most locality and test leverage without reopening ADR 0039.</p>
+      </section>
+    </main>
+  </body>
+</html>
