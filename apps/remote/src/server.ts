@@ -10,18 +10,18 @@ import express from "express";
 import {
   extractCloudId,
   formatAgentConnectorTaskResponse,
-  isTerminalState,
   isValidTransition,
   type MappedEvent,
   type TaskState,
 } from "forge-ahead";
 import { type AuthenticatedRequest, authMiddleware } from "./auth.js";
+import { loadScenarios, matchScenario } from "./scenarios.js";
 import {
-  loadScenarios,
-  matchScenario,
-  type ScenarioStep,
-} from "./scenarios.js";
-import { mapScenarioStep, runScenario } from "./simulator.js";
+  prefixAgentMessage,
+  SimulationScenarioSessionRuntime,
+  type SimulationScenarioSessionStream,
+} from "./scenarioSessionRuntime.js";
+import { isResumableTaskState } from "./scenarioSession.js";
 import {
   type AgentContext,
   contexts,
@@ -106,19 +106,26 @@ const scenarios = scenariosResult.value;
 // docs/adr/0019-canceled-is-emitted-after-runtime-stop.md).
 const CANCELLATION_STOP_DELAY_MS = 50;
 
+const simulationScenarioSessions = new SimulationScenarioSessionRuntime({
+  store: {
+    getTask: (taskId) => tasks.get(taskId),
+    setTask: (task) => {
+      tasks.set(task.id, task);
+    },
+    save: saveData,
+  },
+  cancellationStopDelayMs: CANCELLATION_STOP_DELAY_MS,
+  log: (message, data) => {
+    console.log(message, data);
+  },
+});
+
 // ============================================================================
 // Helper Functions
 // ============================================================================
 
 function generateId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-}
-
-/**
- * Prefix agent messages with robot emoji to make it obvious they come from the automated system
- */
-function prefixAgentMessage(message: string): string {
-  return `🤖 ${message}`;
 }
 
 // ============================================================================
@@ -363,35 +370,7 @@ async function handleTasksCancel({
   params,
 }: JsonRpcHandlerParams): Promise<unknown> {
   const taskId = params.taskId as string;
-  const task = tasks.get(taskId);
-
-  if (!task) {
-    throw new Error("Task not found");
-  }
-
-  const fromState = task.status.state;
-  const cancelState: TaskState = "canceled";
-
-  if (!isValidTransition(fromState, cancelState)) {
-    throw new Error("Task cannot be canceled from current state");
-  }
-
-  const activeStream = activeScenarioStreams.get(taskId);
-  if (activeStream) {
-    stopActiveStreamWithCancellation(task, activeStream);
-  } else {
-    task.status.message.parts = [
-      {
-        kind: "text",
-        text: prefixAgentMessage("Canceling..."),
-      },
-    ];
-    task.status.timestamp = new Date().toISOString();
-    console.log("Task cancellation requested:", { taskId, fromState });
-    scheduleCancellationStop(taskId);
-  }
-
-  saveData();
+  const task = simulationScenarioSessions.cancel(taskId);
   const formattedTask = formatAgentConnectorTaskResponse(task, task.contextId);
   console.log("JSON-RPC tasks/cancel response:", {
     taskId: task.id,
@@ -401,101 +380,9 @@ async function handleTasksCancel({
   return formattedTask;
 }
 
-/**
- * Simulate the Remote Agent runtime acknowledging a stop request: after a
- * short delay, transition the task to terminal `canceled` and persist it.
- * Polling clients observe this on a later `tasks/get` (see
- * docs/adr/0019-canceled-is-emitted-after-runtime-stop.md).
- */
-function scheduleCancellationStop(taskId: string): void {
-  setTimeout(() => {
-    const task = tasks.get(taskId);
-    if (!task || isTerminalState(task.status.state)) {
-      return;
-    }
-
-    task.status.state = "canceled";
-    task.status.message.parts = [
-      {
-        kind: "text",
-        text: prefixAgentMessage("This task has been canceled."),
-      },
-    ];
-    task.status.timestamp = new Date().toISOString();
-    saveData();
-
-    console.log("Task transitioned:", {
-      taskId,
-      toState: "canceled",
-    });
-  }, CANCELLATION_STOP_DELAY_MS);
-}
-
-/**
- * Stop an actively streaming Simulation Scenario and coordinate cancellation
- * over its open SSE connection: stop scenario playback, report cancellation
- * progress as a Content Update, then emit terminal `canceled` and end the
- * stream (see docs/adr/0019-canceled-is-emitted-after-runtime-stop.md).
- * Artifacts already streamed to this connection stay in its event history -
- * cancellation only appends further events, it never rewrites past ones
- * (see docs/adr/0016-artifacts-survive-task-interruptions.md).
- */
-function stopActiveStreamWithCancellation(
-  task: Task,
-  activeStream: ActiveScenarioStream,
-): void {
-  activeStream.cancelPlayback();
-  activeScenarioStreams.delete(task.id);
-
-  const cancelingEvent: MappedEvent = {
-    kind: "content-update",
-    message: "Canceling...",
-  };
-  applyMappedEventToTask(cancelingEvent, task, activeStream.context);
-  writeSseEvent(
-    activeStream.res,
-    activeStream.requestId,
-    buildStreamResponseFromEvent(cancelingEvent, task),
-  );
-
-  const canceledEvent: MappedEvent = {
-    kind: "task-state-update",
-    state: "canceled",
-    final: true,
-    message: "This task has been canceled.",
-  };
-  applyMappedEventToTask(canceledEvent, task, activeStream.context);
-  writeSseEvent(
-    activeStream.res,
-    activeStream.requestId,
-    buildStreamResponseFromEvent(canceledEvent, task),
-  );
-  activeStream.res.end();
-
-  console.log("Task transitioned:", {
-    taskId: task.id,
-    toState: "canceled",
-  });
-}
-
 // ============================================================================
 // SSE Streaming Utilities
 // ============================================================================
-
-/**
- * A Simulation Scenario currently being streamed to an open SSE connection
- * for a task, keyed by taskId. Lets `tasks/cancel` stop an actively running
- * simulated task's scenario playback and end its stream with a coordinated
- * `canceled`, instead of only affecting tasks reachable by polling (see
- * docs/adr/0019-canceled-is-emitted-after-runtime-stop.md).
- */
-interface ActiveScenarioStream {
-  cancelPlayback: () => void;
-  res: import("express").Response;
-  requestId: string;
-  context: AgentContext;
-}
-const activeScenarioStreams = new Map<string, ActiveScenarioStream>();
 
 /**
  * Write a single SSE event to the response stream.
@@ -508,32 +395,6 @@ function writeSseEvent(
 ): void {
   const payload = JSON.stringify({ jsonrpc: "2.0", id, result });
   res.write(`data: ${payload}\n\n`);
-}
-
-/**
- * Apply a mapped Simulation Scenario event to a task's stored state: update
- * the A2A task state (task-state-update steps only), set the status message
- * text, append to context history, and persist.
- */
-function applyMappedEventToTask(
-  event: MappedEvent,
-  task: Task,
-  context: AgentContext,
-): void {
-  const now = new Date().toISOString();
-
-  if (event.kind === "task-state-update") {
-    task.status.state = event.state;
-  }
-  task.status.timestamp = now;
-
-  if (event.kind !== "artifact-update" && event.message) {
-    const text = prefixAgentMessage(event.message);
-    task.status.message.parts = [{ kind: "text", text }];
-    context.messages.push({ role: "agent", text, timestamp: now });
-  }
-
-  saveData();
 }
 
 /**
@@ -567,84 +428,24 @@ function buildStreamResponseFromEvent(
   return { statusUpdate };
 }
 
-/**
- * Run the remainder of a Simulation Scenario as SSE events: apply each
- * mapped event to the stored task, write it to the stream, and close the
- * response once a step is final or waits for user input.
- *
- * `allSteps` is the matched scenario's full, unsliced step list (stable
- * object references), used to record `nextStepIndex` after every applied
- * step - not only at a pause - so a later message/send resumption or
- * `tasks/resubscribe` knows where to continue without replaying steps
- * already streamed (see docs/adr/0006 and docs/adr/0015).
- */
-function streamScenarioSteps(
+function createSseSessionStream(
   res: import("express").Response,
   requestId: string,
-  task: Task,
-  context: AgentContext,
-  allSteps: ScenarioStep[],
-  steps: ScenarioStep[],
-): void {
-  const playback = runScenario(steps, (event, step) => {
-    task.nextStepIndex = allSteps.indexOf(step) + 1;
-    applyMappedEventToTask(event, task, context);
-    writeSseEvent(res, requestId, buildStreamResponseFromEvent(event, task));
-
-    console.log("Scenario event streamed:", {
-      taskId: task.id,
-      kind: event.kind,
-      state: task.status.state,
-      final: step.final ?? false,
-    });
-
-    if (step.final || step.waitForUserInput) {
-      activeScenarioStreams.delete(task.id);
+): SimulationScenarioSessionStream {
+  return {
+    emit: (event, task) => {
+      writeSseEvent(res, requestId, buildStreamResponseFromEvent(event, task));
+      console.log("Scenario event streamed:", {
+        taskId: task.id,
+        kind: event.kind,
+        state: task.status.state,
+        final: event.kind === "task-state-update" ? event.final : false,
+      });
+    },
+    close: () => {
       res.end();
-    }
-  });
-
-  activeScenarioStreams.set(task.id, {
-    cancelPlayback: playback.cancel,
-    res,
-    requestId,
-    context,
-  });
-}
-
-/**
- * Fold a scenario's leading step into the task's current status in place of
- * a separate SSE event: normally `working`, or an immediate
- * interrupted/terminal state (see docs/adr/0021). Used both when a task is
- * first created and when it resumes from a pause (see docs/adr/0017), so a
- * `working` Task State Update always precedes the remaining streamed steps.
- *
- * An artifact-update step can't be a task's status, so it is left in the
- * returned remaining steps instead of being folded.
- *
- * `allSteps` is the matched scenario's full, unsliced step list, used to
- * record `nextStepIndex` for the folded step the same way `streamScenarioSteps`
- * does for streamed steps.
- */
-function foldLeadingStep(
-  allSteps: ScenarioStep[],
-  steps: ScenarioStep[],
-  task: Task,
-  context: AgentContext,
-): { remaining: ScenarioStep[]; folded?: ScenarioStep } {
-  const [firstStep, ...rest] = steps;
-  if (!firstStep) {
-    return { remaining: [] };
-  }
-
-  const firstMapped = mapScenarioStep(firstStep);
-  if (firstMapped.kind === "artifact-update") {
-    return { remaining: steps };
-  }
-
-  task.nextStepIndex = allSteps.indexOf(firstStep) + 1;
-  applyMappedEventToTask(firstMapped, task, context);
-  return { remaining: rest, folded: firstStep };
+    },
+  };
 }
 
 // ============================================================================
@@ -677,7 +478,7 @@ async function handleSendStreamingMessage(
 
   if (message.taskId) {
     const existingTask = tasks.get(message.taskId);
-    if (existingTask && isResumableState(existingTask.status.state)) {
+    if (existingTask && isResumableTaskState(existingTask.status.state)) {
       await handleResumeStreamingMessage(
         res,
         requestId,
@@ -726,15 +527,11 @@ async function handleSendStreamingMessage(
     scenarioId: scenario.id,
   } satisfies Task;
 
-  const { remaining, folded } = foldLeadingStep(
-    scenario.steps,
-    scenario.steps,
+  const continuation = simulationScenarioSessions.start(
     task,
     context,
+    scenario,
   );
-
-  tasks.set(taskId, task);
-  saveData();
 
   console.log("Streaming task created:", { taskId, contextId, workItemId });
 
@@ -748,22 +545,13 @@ async function handleSendStreamingMessage(
   const formattedTask = formatAgentConnectorTaskResponse(task, contextId);
   writeSseEvent(res, requestId, { task: formattedTask as Task });
 
-  if (folded && (folded.final || folded.waitForUserInput)) {
-    res.end();
-    return;
-  }
-
-  streamScenarioSteps(res, requestId, task, context, scenario.steps, remaining);
-}
-
-/**
- * A task can be resumed by any subsequent user input while it's paused at
- * `auth-required` or `input-required`, per docs/adr/0015 and the initial
- * A2A Simulator happy path (see docs/adr/0036). Other interruption states
- * are out of scope for this pass.
- */
-function isResumableState(state: TaskState): boolean {
-  return state === "auth-required" || state === "input-required";
+  simulationScenarioSessions.attachStream(
+    task,
+    context,
+    scenario,
+    createSseSessionStream(res, requestId),
+    continuation,
+  );
 }
 
 /**
@@ -791,15 +579,11 @@ async function handleResumeStreamingMessage(
   }
 
   const resumedAtStepIndex = task.nextStepIndex ?? 0;
-  const pausedSteps = scenario.steps.slice(resumedAtStepIndex);
-  const { remaining, folded } = foldLeadingStep(
-    scenario.steps,
-    pausedSteps,
+  const continuation = simulationScenarioSessions.resume(
     task,
     context,
+    scenario,
   );
-
-  saveData();
 
   console.log("Streaming task resumed:", {
     taskId: task.id,
@@ -815,12 +599,13 @@ async function handleResumeStreamingMessage(
   const formattedTask = formatAgentConnectorTaskResponse(task, task.contextId);
   writeSseEvent(res, requestId, { task: formattedTask as Task });
 
-  if (folded && (folded.final || folded.waitForUserInput)) {
-    res.end();
-    return;
-  }
-
-  streamScenarioSteps(res, requestId, task, context, scenario.steps, remaining);
+  simulationScenarioSessions.attachStream(
+    task,
+    context,
+    scenario,
+    createSseSessionStream(res, requestId),
+    continuation,
+  );
 }
 
 /**
@@ -863,44 +648,18 @@ async function handleTasksResubscribe(
     state: task.status.state,
   });
 
-  // A terminal task has nothing further to stream. A task paused at
-  // auth-required/input-required also has nothing further to stream until
-  // the user responds via message/send (see docs/adr/0036) - resubscribing
-  // must not auto-continue past that pause on its own. Both cases close
-  // immediately after reporting the current snapshot.
-  if (
-    isTerminalState(task.status.state) ||
-    isResumableState(task.status.state)
-  ) {
-    res.end();
-    return;
-  }
-
-  // Task still active — take over any still-open prior connection for this
-  // task so it doesn't keep streaming in parallel with this one, then
-  // continue the matched Simulation Scenario from the next step that hasn't
-  // been applied yet, rather than replaying steps already streamed (see
-  // docs/adr/0006).
-  const priorStream = activeScenarioStreams.get(taskId);
-  if (priorStream) {
-    priorStream.cancelPlayback();
-    activeScenarioStreams.delete(taskId);
-    priorStream.res.end();
-  }
-
   const context = contexts.get(task.contextId);
   const scenario = scenarios.find(
     (candidate) => candidate.id === task.scenarioId,
   );
   if (context && scenario) {
-    const remaining = scenario.steps.slice(task.nextStepIndex ?? 0);
-    streamScenarioSteps(
-      res,
-      requestId,
+    const continuation = simulationScenarioSessions.resubscribe(task, scenario);
+    simulationScenarioSessions.attachStream(
       task,
       context,
-      scenario.steps,
-      remaining,
+      scenario,
+      createSseSessionStream(res, requestId),
+      continuation,
     );
   } else {
     res.end();

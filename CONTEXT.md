@@ -24,6 +24,10 @@ _Avoid_: Knock-knock demo, real coding runtime
 A human-readable, editable YAML script that drives the A2A Simulator's streamed behavior for a specific kind of task. Scenarios should use explicit A2A-oriented fields and be stored as data rather than hardcoded control flow.
 _Avoid_: Hardcoded branch, hidden fixture
 
+**Simulation Scenario Session**:
+One task's execution of one matched Simulation Scenario, including where execution can continue from after streaming, interruption, resumption, or cancellation. A Session is task-local and does not imply a Jira-visible replay cursor or a durable event store.
+_Avoid_: Scenario runner, playback helper, stream handler
+
 **Scenario Matching**:
 The process of choosing a Simulation Scenario by matching the starting task text or context with ordered, case-insensitive `contains` phrase rules. Matching should be deterministic and understandable to people editing scenarios.
 In the current Reference Implementation, Scenario Matching only uses the joined text parts from the starting message; matching on structured context remains a known implementation gap.
