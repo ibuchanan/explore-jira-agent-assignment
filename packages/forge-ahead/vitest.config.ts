@@ -9,6 +9,15 @@ export default defineConfig({
     // Use Node environment for testing
     environment: "node",
 
+    // TypeScript's published compiler bundle points at a source map that is
+    // not included in the npm package. Keep it on Node's native loader path so
+    // Vite does not try to resolve that missing map during SSR transforms.
+    server: {
+      deps: {
+        external: ["typescript"],
+      },
+    },
+
     // Configure code coverage
     coverage: {
       provider: "v8",
