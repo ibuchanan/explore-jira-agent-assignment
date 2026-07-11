@@ -5,14 +5,22 @@
  * It implements the Agent2Agent (A2A) JSON-RPC protocol for task management.
  */
 
+import path from "node:path";
 import express from "express";
 import {
   extractCloudId,
   formatAgentConnectorTaskResponse,
   isValidTransition,
+  type MappedEvent,
   type TaskState,
 } from "forge-ahead";
 import { type AuthenticatedRequest, authMiddleware } from "./auth.js";
+import {
+  loadScenarios,
+  matchScenario,
+  type ScenarioStep,
+} from "./scenarios.js";
+import { mapScenarioStep, runScenario } from "./simulator.js";
 import {
   type AgentContext,
   contexts,
@@ -81,6 +89,17 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
+// A2A Simulator: Simulation Scenarios are loaded once at startup from
+// human-editable YAML files (see docs/adr/0035).
+const SCENARIOS_DIR = path.join(process.cwd(), "scenarios");
+const scenariosResult = loadScenarios(SCENARIOS_DIR);
+if (scenariosResult.isErr()) {
+  throw new Error(
+    `Failed to load Simulation Scenarios: ${scenariosResult.error.detail}`,
+  );
+}
+const scenarios = scenariosResult.value;
+
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -145,6 +164,16 @@ function extractDataFields(parts: unknown[]): {
     }
   }
   return { workItemId: undefined, userAccountId: undefined };
+}
+
+/**
+ * Join every text part in `parts` into a single string for Scenario Matching.
+ */
+function extractTaskText(parts: unknown[]): string {
+  return parts
+    .filter((part) => (part as { kind?: string }).kind === "text")
+    .map((part) => (part as { text?: string }).text ?? "")
+    .join(" ");
 }
 
 /**
@@ -383,101 +412,87 @@ function writeSseEvent(
 }
 
 /**
- * The joke steps streamed to the client:
- *   1. "Knock, knock."          (working)
- *   2. "Otto."                  (working)
- *   3. "Otto-matically done!"   (completed, final)
- *
- * Delays are in milliseconds — kept short for a snappy demo.
+ * Apply a mapped Simulation Scenario event to a task's stored state: update
+ * the A2A task state (task-state-update steps only), set the status message
+ * text, append to context history, and persist.
  */
-const JOKE_STEPS: Array<{
-  delayMs: number;
-  state: TaskState;
-  text: string;
-  final: boolean;
-}> = [
-  { delayMs: 1000, state: "working", text: "Knock, knock.", final: false },
-  { delayMs: 2000, state: "working", text: "Otto.", final: false },
-  {
-    delayMs: 3000,
-    state: "completed",
-    text: "Otto-matically done! 🤖",
-    final: true,
-  },
-];
+function applyMappedEventToTask(
+  event: MappedEvent,
+  task: Task,
+  context: AgentContext,
+): void {
+  const now = new Date().toISOString();
+
+  if (event.kind === "task-state-update") {
+    task.status.state = event.state;
+  }
+  task.status.timestamp = now;
+
+  if (event.kind !== "artifact-update" && event.message) {
+    const text = prefixAgentMessage(event.message);
+    task.status.message.parts = [{ kind: "text", text }];
+    context.messages.push({ role: "agent", text, timestamp: now });
+  }
+
+  saveData();
+}
 
 /**
- * Stream the knock-knock joke as SSE events, updating the stored task at each step.
- * Closes `res` when the final event has been sent.
+ * Build the SSE `StreamResponse` payload for a mapped Simulation Scenario
+ * event, reading the task's current (already-applied) status.
  */
-function streamJokeSteps(
+function buildStreamResponseFromEvent(
+  event: MappedEvent,
+  task: Task,
+): StreamResponse {
+  if (event.kind === "artifact-update") {
+    const artifactUpdate: TaskArtifactUpdateEvent = {
+      taskId: task.id,
+      contextId: task.contextId,
+      artifact: event.artifact,
+      kind: "artifact-update",
+    };
+    return { artifactUpdate };
+  }
+
+  const statusUpdate: TaskStatusUpdateEvent = {
+    taskId: task.id,
+    contextId: task.contextId,
+    status: { state: task.status.state, timestamp: task.status.timestamp },
+    message: task.status.message,
+    kind: "status-update",
+    final: event.kind === "task-state-update" ? event.final : false,
+  };
+  return { statusUpdate };
+}
+
+/**
+ * Run the remainder of a Simulation Scenario as SSE events: apply each
+ * mapped event to the stored task, write it to the stream, and close the
+ * response once a step is final or waits for user input.
+ */
+function streamScenarioSteps(
   res: import("express").Response,
   requestId: string,
   task: Task,
-  context: import("./storage.js").AgentContext,
+  context: AgentContext,
+  steps: ScenarioStep[],
 ): void {
-  let stepIndex = 0;
+  runScenario(steps, (event, step) => {
+    applyMappedEventToTask(event, task, context);
+    writeSseEvent(res, requestId, buildStreamResponseFromEvent(event, task));
 
-  function sendNext(): void {
-    if (stepIndex >= JOKE_STEPS.length) {
+    console.log("Scenario event streamed:", {
+      taskId: task.id,
+      kind: event.kind,
+      state: task.status.state,
+      final: step.final ?? false,
+    });
+
+    if (step.final || step.waitForUserInput) {
       res.end();
-      return;
     }
-
-    const step = JOKE_STEPS[stepIndex++];
-
-    setTimeout(() => {
-      const now = new Date().toISOString();
-
-      // Update the stored task
-      task.status.state = step.state;
-      task.status.timestamp = now;
-      task.status.message.parts = [
-        { kind: "text", text: prefixAgentMessage(step.text) },
-      ];
-      saveData();
-
-      // Add to context history
-      context.messages.push({
-        role: "agent",
-        text: prefixAgentMessage(step.text),
-        timestamp: now,
-      });
-
-      const statusUpdate: TaskStatusUpdateEvent = {
-        taskId: task.id,
-        contextId: task.contextId,
-        status: { state: step.state, timestamp: now },
-        message: {
-          role: "agent",
-          parts: [{ kind: "text", text: prefixAgentMessage(step.text) }],
-          messageId: generateId("msg"),
-          taskId: task.id,
-          contextId: task.contextId,
-          kind: "message",
-        },
-        kind: "status-update",
-        final: step.final,
-      };
-
-      writeSseEvent(res, requestId, { statusUpdate });
-
-      console.log("SSE event sent:", {
-        taskId: task.id,
-        state: step.state,
-        final: step.final,
-        text: step.text,
-      });
-
-      if (step.final) {
-        res.end();
-      } else {
-        sendNext();
-      }
-    }, step.delayMs);
-  }
-
-  sendNext();
+  });
 }
 
 // ============================================================================
@@ -488,10 +503,14 @@ function streamJokeSteps(
  * Handle message/send with SSE streaming response.
  * Called when Jira sends `Accept: text/event-stream` (i.e. streaming: true in manifest).
  *
- * Emits:
- *   1. { task }          — initial task object (submitted → working)
- *   2. { statusUpdate }  — intermediate joke steps (working)
- *   3. { statusUpdate, final: true } — completed step, then closes stream
+ * A Simulation Scenario is matched from the starting task text (see
+ * docs/adr/0033) and drives the stream from task acceptance through
+ * completion or interruption (see docs/adr/0021):
+ *   1. { task }                       — initial task, reflecting the matched
+ *                                        scenario's first step (normally
+ *                                        `working`, or an immediate
+ *                                        interrupted/terminal state)
+ *   2. { statusUpdate | artifactUpdate } — remaining scenario steps, in order
  */
 async function handleSendStreamingMessage(
   _req: import("express").Request,
@@ -508,12 +527,17 @@ async function handleSendStreamingMessage(
   const { contextId, workItemId, userAccountId, context } =
     resolveMessageContext(message, cloudId);
 
-  // Create task in working state immediately
-  const now = new Date().toISOString();
-  const initialText = workItemId
-    ? `I'm working on ${workItemId}...`
-    : "I'm working on this...";
+  const { scenario, matchedBy } = matchScenario(
+    scenarios,
+    extractTaskText(message.parts),
+  );
+  console.log("Streaming task matched Simulation Scenario:", {
+    taskId,
+    scenarioId: scenario.id,
+    matchedBy,
+  });
 
+  const now = new Date().toISOString();
   const task = {
     id: taskId,
     contextId,
@@ -521,9 +545,7 @@ async function handleSendStreamingMessage(
       state: "working" as TaskState,
       message: {
         role: "agent" as const,
-        parts: [
-          { kind: "text" as const, text: prefixAgentMessage(initialText) },
-        ],
+        parts: [],
         messageId: generateId("msg"),
         taskId,
         contextId,
@@ -534,7 +556,19 @@ async function handleSendStreamingMessage(
     kind: "task" as const,
     userAccountId,
     workItemId,
+    scenarioId: scenario.id,
   } satisfies Task;
+
+  // The first step defines the initial task: normally `working`, or an
+  // immediate interrupted/terminal state when the scenario cannot start
+  // normally. An artifact can't be a task's status, so it is left for the
+  // regular per-step stream below instead of folded into task creation.
+  const [firstStep, ...remainingSteps] = scenario.steps;
+  const firstMapped = mapScenarioStep(firstStep);
+  const foldedFirstStep = firstMapped.kind !== "artifact-update";
+  if (foldedFirstStep) {
+    applyMappedEventToTask(firstMapped, task, context);
+  }
 
   tasks.set(taskId, task);
   saveData();
@@ -551,8 +585,18 @@ async function handleSendStreamingMessage(
   const formattedTask = formatAgentConnectorTaskResponse(task, contextId);
   writeSseEvent(res, requestId, { task: formattedTask as Task });
 
-  // Stream joke steps asynchronously
-  streamJokeSteps(res, requestId, task, context);
+  if (foldedFirstStep && (firstStep.final || firstStep.waitForUserInput)) {
+    res.end();
+    return;
+  }
+
+  streamScenarioSteps(
+    res,
+    requestId,
+    task,
+    context,
+    foldedFirstStep ? remainingSteps : scenario.steps,
+  );
 }
 
 /**
@@ -606,10 +650,17 @@ async function handleTasksResubscribe(
     return;
   }
 
-  // Task still active — resume streaming remaining joke steps
+  // Task still active — resume streaming.
+  // Note: this replays the matched scenario's steps from the beginning
+  // rather than resuming from where the prior connection left off, matching
+  // the pre-existing (and still unresolved) resubscribe behavior. Proper
+  // resubscribe replay is tracked separately (see specs/tickets/12-*.md).
   const context = contexts.get(task.contextId);
-  if (context) {
-    streamJokeSteps(res, requestId, task, context);
+  const scenario = scenarios.find(
+    (candidate) => candidate.id === task.scenarioId,
+  );
+  if (context && scenario) {
+    streamScenarioSteps(res, requestId, task, context, scenario.steps);
   } else {
     res.end();
   }

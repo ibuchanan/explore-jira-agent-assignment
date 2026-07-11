@@ -1,0 +1,12 @@
+# Demonstrates a Simulation Scenario that cannot start normally: streaming
+# begins with an immediate terminal state instead of `working`.
+# @see docs/adr/0021-streaming-starts-with-working-after-acceptance.md
+id: immediate-rejection
+match:
+  contains:
+    - "reject immediately"
+steps:
+  - event: status-update
+    state: rejected
+    message: "This request cannot be accepted."
+    final: true

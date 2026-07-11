@@ -19,6 +19,8 @@ export type Task = BaseTask & {
   userAccountId?: string;
   workItemId?: string;
   contextId: string;
+  /** Simulation Scenario id matched for this task's streamed execution. */
+  scenarioId?: string;
 };
 
 // ============================================================================

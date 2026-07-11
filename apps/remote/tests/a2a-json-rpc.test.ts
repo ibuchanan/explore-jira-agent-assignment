@@ -68,6 +68,71 @@ async function postJsonRpc(
   }
 }
 
+/**
+ * Post a streaming (SSE) JSON-RPC request and collect every parsed
+ * `data: <json>` event until the response closes.
+ */
+async function postJsonRpcStreaming(body: unknown): Promise<unknown[]> {
+  const { createServer } = await import("node:http");
+
+  const server = createServer(app);
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") {
+    server.close();
+    throw new Error("Could not start test server");
+  }
+
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/a2a/json-rpc`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "text/event-stream",
+          authorization: "Bearer test-fit",
+        },
+        body: JSON.stringify(body),
+      },
+    );
+
+    if (!response.body) {
+      throw new Error("Streaming response had no body");
+    }
+
+    const events: unknown[] = [];
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+
+      let boundary = buffer.indexOf("\n\n");
+      while (boundary !== -1) {
+        const rawEvent = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        const dataLine = rawEvent
+          .split("\n")
+          .find((line) => line.startsWith("data: "));
+        if (dataLine) {
+          events.push(JSON.parse(dataLine.slice("data: ".length)));
+        }
+        boundary = buffer.indexOf("\n\n");
+      }
+    }
+
+    return events;
+  } finally {
+    server.close();
+  }
+}
+
 describe("A2A JSON-RPC protocol contract", () => {
   beforeEach(() => {
     validateAuthHeader.mockReset();
@@ -336,5 +401,133 @@ describe("A2A JSON-RPC protocol contract", () => {
       id: "req-get-unknown-task",
       error: { code: -32001, message: "Task not found" },
     });
+  });
+});
+
+describe("A2A JSON-RPC streaming message/send (Simulation Scenario driven)", () => {
+  beforeEach(() => {
+    validateAuthHeader.mockReset();
+    validateAuthHeader.mockResolvedValue({
+      isErr: () => false,
+      value: fitPayload,
+    });
+    tasks.clear();
+    contexts.clear();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("begins streaming with the matched scenario's first step state and message", async () => {
+    const events = await postJsonRpcStreaming({
+      jsonrpc: "2.0",
+      id: "req-stream",
+      method: "message/send",
+      params: messageSendParams,
+    });
+
+    const first = events[0] as {
+      result: {
+        task: {
+          status: {
+            state: string;
+            message: { parts: Array<{ text: string }> };
+          };
+        };
+      };
+    };
+
+    expect(first.result.task.status.state).toBe("working");
+    expect(first.result.task.status.message.parts[0].text).toContain(
+      "Starting work on this task.",
+    );
+  });
+
+  it("streams the remaining scenario steps in order, ending with a final event that closes the stream", async () => {
+    const events = await postJsonRpcStreaming({
+      jsonrpc: "2.0",
+      id: "req-stream-order",
+      method: "message/send",
+      params: messageSendParams,
+    });
+
+    type StatusUpdateEnvelope = {
+      result: {
+        statusUpdate?: {
+          status: { state: string; final?: undefined };
+          message: { parts: Array<{ text: string }> };
+          final: boolean;
+        };
+      };
+    };
+    const [, second, third] = events as StatusUpdateEnvelope[];
+
+    expect(events).toHaveLength(3);
+
+    expect(second.result.statusUpdate?.status.state).toBe("working");
+    expect(second.result.statusUpdate?.final).toBe(false);
+    expect(second.result.statusUpdate?.message.parts[0].text).toContain(
+      "Looking into the details...",
+    );
+
+    expect(third.result.statusUpdate?.status.state).toBe("completed");
+    expect(third.result.statusUpdate?.final).toBe(true);
+    expect(third.result.statusUpdate?.message.parts[0].text).toContain(
+      "Finished the task.",
+    );
+  });
+
+  it("leaves polling/non-streaming message/send using submitted-then-working, unaffected by the scenario runner", async () => {
+    const response = await postJsonRpc({
+      jsonrpc: "2.0",
+      id: "req-polling-unaffected",
+      method: "message/send",
+      params: messageSendParams,
+    });
+
+    const body = await response.json();
+
+    expect(body.result.status.state).toBe("working");
+  });
+
+  it("begins streaming with an immediate terminal state when the matched scenario cannot start normally", async () => {
+    const events = await postJsonRpcStreaming({
+      jsonrpc: "2.0",
+      id: "req-stream-reject",
+      method: "message/send",
+      params: {
+        ...messageSendParams,
+        message: {
+          ...messageSendParams.message,
+          parts: [
+            {
+              text: "Please reject immediately, this is out of scope.",
+              kind: "text",
+            },
+          ],
+        },
+      },
+    });
+
+    const first = events[0] as {
+      result: {
+        task: {
+          status: {
+            state: string;
+            message: { parts: Array<{ text: string }> };
+          };
+        };
+      };
+    };
+
+    expect(events).toHaveLength(1);
+    expect(first.result.task.status.state).toBe("rejected");
+    expect(first.result.task.status.message.parts[0].text).toContain(
+      "This request cannot be accepted.",
+    );
   });
 });
