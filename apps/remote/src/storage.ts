@@ -21,6 +21,8 @@ export type Task = BaseTask & {
   contextId: string;
   /** Simulation Scenario id matched for this task's streamed execution. */
   scenarioId?: string;
+  /** Index into the matched scenario's steps to resume from after a pause. */
+  pausedAtStepIndex?: number;
 };
 
 // ============================================================================

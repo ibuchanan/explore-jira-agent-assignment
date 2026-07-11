@@ -470,15 +470,23 @@ function buildStreamResponseFromEvent(
  * Run the remainder of a Simulation Scenario as SSE events: apply each
  * mapped event to the stored task, write it to the stream, and close the
  * response once a step is final or waits for user input.
+ *
+ * `allSteps` is the matched scenario's full, unsliced step list (stable
+ * object references), used only to record `pausedAtStepIndex` so a later
+ * resumption knows where to continue (see docs/adr/0015).
  */
 function streamScenarioSteps(
   res: import("express").Response,
   requestId: string,
   task: Task,
   context: AgentContext,
+  allSteps: ScenarioStep[],
   steps: ScenarioStep[],
 ): void {
   runScenario(steps, (event, step) => {
+    if (step.waitForUserInput) {
+      task.pausedAtStepIndex = allSteps.indexOf(step) + 1;
+    }
     applyMappedEventToTask(event, task, context);
     writeSseEvent(res, requestId, buildStreamResponseFromEvent(event, task));
 
@@ -493,6 +501,35 @@ function streamScenarioSteps(
       res.end();
     }
   });
+}
+
+/**
+ * Fold a scenario's leading step into the task's current status in place of
+ * a separate SSE event: normally `working`, or an immediate
+ * interrupted/terminal state (see docs/adr/0021). Used both when a task is
+ * first created and when it resumes from a pause (see docs/adr/0017), so a
+ * `working` Task State Update always precedes the remaining streamed steps.
+ *
+ * An artifact-update step can't be a task's status, so it is left in the
+ * returned remaining steps instead of being folded.
+ */
+function foldLeadingStep(
+  steps: ScenarioStep[],
+  task: Task,
+  context: AgentContext,
+): { remaining: ScenarioStep[]; folded?: ScenarioStep } {
+  const [firstStep, ...rest] = steps;
+  if (!firstStep) {
+    return { remaining: [] };
+  }
+
+  const firstMapped = mapScenarioStep(firstStep);
+  if (firstMapped.kind === "artifact-update") {
+    return { remaining: steps };
+  }
+
+  applyMappedEventToTask(firstMapped, task, context);
+  return { remaining: rest, folded: firstStep };
 }
 
 // ============================================================================
@@ -520,8 +557,23 @@ async function handleSendStreamingMessage(
   cloudId: string | undefined,
 ): Promise<void> {
   const { message } = params as {
-    message: { contextId?: string; parts: unknown[] };
+    message: { contextId?: string; taskId?: string; parts: unknown[] };
   };
+
+  if (message.taskId) {
+    const existingTask = tasks.get(message.taskId);
+    if (existingTask && isResumableState(existingTask.status.state)) {
+      await handleResumeStreamingMessage(
+        res,
+        requestId,
+        existingTask,
+        message,
+        cloudId,
+      );
+      return;
+    }
+  }
+
   const taskId = generateId("task");
 
   const { contextId, workItemId, userAccountId, context } =
@@ -559,16 +611,7 @@ async function handleSendStreamingMessage(
     scenarioId: scenario.id,
   } satisfies Task;
 
-  // The first step defines the initial task: normally `working`, or an
-  // immediate interrupted/terminal state when the scenario cannot start
-  // normally. An artifact can't be a task's status, so it is left for the
-  // regular per-step stream below instead of folded into task creation.
-  const [firstStep, ...remainingSteps] = scenario.steps;
-  const firstMapped = mapScenarioStep(firstStep);
-  const foldedFirstStep = firstMapped.kind !== "artifact-update";
-  if (foldedFirstStep) {
-    applyMappedEventToTask(firstMapped, task, context);
-  }
+  const { remaining, folded } = foldLeadingStep(scenario.steps, task, context);
 
   tasks.set(taskId, task);
   saveData();
@@ -585,18 +628,72 @@ async function handleSendStreamingMessage(
   const formattedTask = formatAgentConnectorTaskResponse(task, contextId);
   writeSseEvent(res, requestId, { task: formattedTask as Task });
 
-  if (foldedFirstStep && (firstStep.final || firstStep.waitForUserInput)) {
+  if (folded && (folded.final || folded.waitForUserInput)) {
     res.end();
     return;
   }
 
-  streamScenarioSteps(
-    res,
-    requestId,
-    task,
-    context,
-    foldedFirstStep ? remainingSteps : scenario.steps,
+  streamScenarioSteps(res, requestId, task, context, scenario.steps, remaining);
+}
+
+/**
+ * A task can be resumed by any subsequent user input while it's paused at
+ * `auth-required`, per the initial A2A Simulator happy path (see
+ * docs/adr/0036). Other interruption states are out of scope for this pass.
+ */
+function isResumableState(state: TaskState): boolean {
+  return state === "auth-required";
+}
+
+/**
+ * Resume a paused task's SSE stream from a follow-up message/send: record
+ * the user's input in the same context, transition back to `working` before
+ * any further Content Updates or Artifact updates (see docs/adr/0017), and
+ * continue the matched Simulation Scenario from where it paused. Task
+ * identity and message history stay connected across the pause (see
+ * docs/adr/0015) — no new task or context is created.
+ */
+async function handleResumeStreamingMessage(
+  res: import("express").Response,
+  requestId: string,
+  task: Task,
+  message: { contextId?: string; parts: unknown[] },
+  cloudId: string | undefined,
+): Promise<void> {
+  const { context } = resolveMessageContext(message, cloudId);
+
+  const scenario = scenarios.find(
+    (candidate) => candidate.id === task.scenarioId,
   );
+  if (!scenario) {
+    throw new Error("Scenario not found for resumed task");
+  }
+
+  const pausedSteps = scenario.steps.slice(task.pausedAtStepIndex ?? 0);
+  const { remaining, folded } = foldLeadingStep(pausedSteps, task, context);
+
+  saveData();
+
+  console.log("Streaming task resumed:", {
+    taskId: task.id,
+    scenarioId: scenario.id,
+    resumedAtStepIndex: task.pausedAtStepIndex ?? 0,
+  });
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders();
+
+  const formattedTask = formatAgentConnectorTaskResponse(task, task.contextId);
+  writeSseEvent(res, requestId, { task: formattedTask as Task });
+
+  if (folded && (folded.final || folded.waitForUserInput)) {
+    res.end();
+    return;
+  }
+
+  streamScenarioSteps(res, requestId, task, context, scenario.steps, remaining);
 }
 
 /**
@@ -660,7 +757,14 @@ async function handleTasksResubscribe(
     (candidate) => candidate.id === task.scenarioId,
   );
   if (context && scenario) {
-    streamScenarioSteps(res, requestId, task, context, scenario.steps);
+    streamScenarioSteps(
+      res,
+      requestId,
+      task,
+      context,
+      scenario.steps,
+      scenario.steps,
+    );
   } else {
     res.end();
   }

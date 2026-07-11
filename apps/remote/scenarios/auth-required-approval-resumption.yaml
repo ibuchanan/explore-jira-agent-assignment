@@ -1,0 +1,35 @@
+# Simulated Coding Remote Agent: a single, clearly labeled Tool Approval
+# pause (`auth-required`) partway through the work, then resumption to
+# `working` once the user sends any follow-up input.
+# @see specs/tickets/06-auth-required-approval-resumption.md
+# @see docs/adr/0013-recoverable-authorization-uses-auth-required.md
+# @see docs/adr/0030-approval-requests-are-clearly-labeled.md
+# @see docs/adr/0036-auth-required-resumes-on-any-user-input.md
+id: auth-required-approval-resumption
+match:
+  contains:
+    - "push the hotfix to the repository"
+steps:
+  - event: status-update
+    state: working
+    message: "Starting work on the hotfix."
+  - event: status-update
+    message: "Preparing the change and running the local test suite."
+    delayMs: 20
+  - event: status-update
+    state: auth-required
+    message: "Approval required: I need permission to push commits to the release repository before I can continue."
+    waitForUserInput: true
+    delayMs: 20
+  - event: status-update
+    state: working
+    message: "Thanks, resuming work now that repository access is approved."
+    delayMs: 20
+  - event: status-update
+    message: "Pushing the hotfix commit to the release repository."
+    delayMs: 20
+  - event: status-update
+    state: completed
+    message: "Pushed the hotfix and verified the release pipeline succeeded."
+    final: true
+    delayMs: 20
