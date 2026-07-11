@@ -1,0 +1,32 @@
+# Simulated Coding Remote Agent: a coherent successful coding task showing
+# Thinking Process, optional Internal Thinking, model progress, and Tool
+# Activity as A2A-compatible content, ending in a brief `completed` message.
+# @see specs/tickets/05-coding-agent-content-happy-path.md
+id: coding-agent-happy-path
+match:
+  contains:
+    - "fix the login bug"
+steps:
+  - event: status-update
+    state: working
+    message: "Starting work on the login bug."
+  - event: status-update
+    message: "Inspecting the repository and locating the code paths related to the login bug."
+    delayMs: 20
+  - event: status-update
+    message: "Internal thinking: the validation check runs before the session token is refreshed, so fixing the order should resolve the bug."
+    delayMs: 20
+  - event: status-update
+    message: "Drafting a code change that reorders the session validation."
+    delayMs: 20
+  - event: status-update
+    message: "Tool: running the checkout test suite against the change."
+    delayMs: 20
+  - event: status-update
+    message: "Tool result: all 42 tests passed."
+    delayMs: 20
+  - event: status-update
+    state: completed
+    message: "Fixed the login bug and verified tests pass."
+    final: true
+    delayMs: 20
