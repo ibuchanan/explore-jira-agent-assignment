@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  checkComplianceWarnings,
   loadScenarios,
   matchScenario,
   type Scenario,
@@ -103,7 +104,7 @@ steps: []
     expect(result.error).toMatchObject({ status: 400 });
   });
 
-  it("does not reject a scenario for unusual A2A or Jira semantics", () => {
+  it("does not reject a scenario for unusual A2A or Jira semantics, but logs a Compliance Warning", () => {
     writeScenario(
       "unusual.yaml",
       `
@@ -115,6 +116,7 @@ steps:
     waitForUserInput: true
 `,
     );
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const result = loadScenarios(testDir);
 
@@ -124,6 +126,35 @@ steps:
       final: true,
       waitForUserInput: true,
     });
+    expect(warnSpy).toHaveBeenCalledWith(
+      "Compliance Warning",
+      expect.objectContaining({ status: 422 }),
+    );
+
+    warnSpy.mockRestore();
+  });
+
+  it("does not log a Compliance Warning for a fully A2A-compliant scenario", () => {
+    writeScenario(
+      "compliant.yaml",
+      `
+id: compliant
+steps:
+  - event: status-update
+    state: working
+  - event: status-update
+    state: completed
+    final: true
+`,
+    );
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const result = loadScenarios(testDir);
+
+    expect(result.isOk()).toBe(true);
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    warnSpy.mockRestore();
   });
 });
 
@@ -150,6 +181,59 @@ steps:
       delayMs: 250,
       artifact: { artifactId: "patch-1", name: "patch.diff" },
     });
+  });
+});
+
+describe("checkComplianceWarnings", () => {
+  it("warns with a 422 Problem Details entry for a step with an unrecognized A2A task state", () => {
+    const scenario: Scenario = {
+      id: "unusual-client-test",
+      steps: [{ event: "status-update", state: "not-a-real-a2a-state" }],
+    };
+
+    const warnings = checkComplianceWarnings(scenario);
+
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatchObject({
+      status: 422,
+      type: expect.stringContaining("a2a-protocol.org"),
+      detail: expect.stringContaining("not-a-real-a2a-state"),
+    });
+    expect(warnings[0].timestamp).toBeDefined();
+  });
+
+  it("does not warn for a step using a recognized A2A task state", () => {
+    const scenario: Scenario = {
+      id: "happy-path",
+      steps: [{ event: "status-update", state: "working" }],
+    };
+
+    expect(checkComplianceWarnings(scenario)).toEqual([]);
+  });
+
+  it("warns with a 422 Problem Details entry for a step with an unrecognized event type", () => {
+    const scenario: Scenario = {
+      id: "unusual-event-test",
+      steps: [{ event: "not-a-real-event" }],
+    };
+
+    const warnings = checkComplianceWarnings(scenario);
+
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatchObject({
+      status: 422,
+      type: expect.stringContaining("a2a-protocol.org"),
+      detail: expect.stringContaining("not-a-real-event"),
+    });
+  });
+
+  it("does not warn for a step using a recognized event type", () => {
+    const scenario: Scenario = {
+      id: "happy-path",
+      steps: [{ event: "artifact-update" }],
+    };
+
+    expect(checkComplianceWarnings(scenario)).toEqual([]);
   });
 });
 

@@ -50,6 +50,73 @@ export interface ScenarioMatchResult {
   matchedBy: "rule" | "default";
 }
 
+const A2A_TASK_STATE_SPEC_URL =
+  "https://a2a-protocol.org/latest/specification/#413-taskstate";
+const A2A_STREAMING_EVENTS_SPEC_URL =
+  "https://a2a-protocol.org/latest/specification/#42-streaming-events";
+
+const VALID_STEP_EVENTS = new Set(["status-update", "artifact-update"]);
+
+const VALID_TASK_STATES = new Set([
+  "submitted",
+  "working",
+  "input-required",
+  "auth-required",
+  "completed",
+  "rejected",
+  "canceled",
+  "failed",
+  "unknown",
+]);
+
+function complianceWarning(
+  type: string,
+  title: string,
+  detail: string,
+): ProblemDetails {
+  return {
+    type,
+    title,
+    status: 422,
+    detail,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+/**
+ * Semantic compliance only: flags likely A2A or Jira remote-agent
+ * non-compliance in an already structurally valid scenario. These are
+ * non-blocking log entries, not response errors (see
+ * docs/adr/0037-scenario-validation-is-structural-not-semantic.md).
+ */
+export function checkComplianceWarnings(scenario: Scenario): ProblemDetails[] {
+  const warnings: ProblemDetails[] = [];
+
+  scenario.steps.forEach((step, index) => {
+    if (step.state !== undefined && !VALID_TASK_STATES.has(step.state)) {
+      warnings.push(
+        complianceWarning(
+          A2A_TASK_STATE_SPEC_URL,
+          "Unrecognized A2A Task State",
+          `Scenario "${scenario.id}" step ${index} uses task state "${step.state}", which is not a defined A2A TaskState value.`,
+        ),
+      );
+    }
+
+    if (!VALID_STEP_EVENTS.has(step.event)) {
+      warnings.push(
+        complianceWarning(
+          A2A_STREAMING_EVENTS_SPEC_URL,
+          "Unrecognized A2A Streaming Event",
+          `Scenario "${scenario.id}" step ${index} uses event "${step.event}", which is not a defined A2A streaming event kind.`,
+        ),
+      );
+    }
+  });
+
+  return warnings;
+}
+
 /**
  * Structural validation only: catches missing/mistyped required fields.
  * It intentionally does not judge A2A or Jira semantic compliance (see
@@ -102,7 +169,12 @@ export function loadScenarios(dir: string): Result<Scenario[], ProblemDetails> {
       return StandardError.getOrDefault(400).error(structureError);
     }
 
-    scenarios.push(parsed as Scenario);
+    const scenario = parsed as Scenario;
+    scenarios.push(scenario);
+
+    for (const warning of checkComplianceWarnings(scenario)) {
+      console.warn("Compliance Warning", warning);
+    }
   }
 
   return ok(scenarios);
