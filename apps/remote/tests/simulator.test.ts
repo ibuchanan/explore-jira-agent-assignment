@@ -172,4 +172,34 @@ describe("runScenario", () => {
       steps[0],
     );
   });
+
+  it("stops scheduling further steps once the returned controller is canceled", async () => {
+    const steps: ScenarioStep[] = [
+      { event: "status-update", state: "working", delayMs: 10 },
+      { event: "status-update", state: "completed", final: true, delayMs: 10 },
+    ];
+    const onEvent = vi.fn();
+
+    const controller = runScenario(steps, onEvent);
+    await vi.advanceTimersByTimeAsync(10);
+    expect(onEvent).toHaveBeenCalledTimes(1);
+
+    controller.cancel();
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect(onEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it("does nothing when the returned controller is canceled after the scenario already finished", async () => {
+    const steps: ScenarioStep[] = [
+      { event: "status-update", state: "completed", final: true },
+    ];
+    const onEvent = vi.fn();
+
+    const controller = runScenario(steps, onEvent);
+    await vi.runAllTimersAsync();
+
+    expect(() => controller.cancel()).not.toThrow();
+    expect(onEvent).toHaveBeenCalledTimes(1);
+  });
 });

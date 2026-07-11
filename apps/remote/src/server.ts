@@ -10,6 +10,7 @@ import express from "express";
 import {
   extractCloudId,
   formatAgentConnectorTaskResponse,
+  isTerminalState,
   isValidTransition,
   type MappedEvent,
   type TaskState,
@@ -99,6 +100,11 @@ if (scenariosResult.isErr()) {
   );
 }
 const scenarios = scenariosResult.value;
+
+// Cancellation is not immediate: the Reference Implementation simulates
+// asking the runtime to stop before emitting terminal `canceled` (see
+// docs/adr/0019-canceled-is-emitted-after-runtime-stop.md).
+const CANCELLATION_STOP_DELAY_MS = 50;
 
 // ============================================================================
 // Helper Functions
@@ -370,21 +376,22 @@ async function handleTasksCancel({
     throw new Error("Task cannot be canceled from current state");
   }
 
-  task.status.state = cancelState;
-  task.status.message.parts = [
-    {
-      kind: "text",
-      text: prefixAgentMessage("This task has been canceled."),
-    },
-  ];
-  task.status.timestamp = new Date().toISOString();
+  const activeStream = activeScenarioStreams.get(taskId);
+  if (activeStream) {
+    stopActiveStreamWithCancellation(task, activeStream);
+  } else {
+    task.status.message.parts = [
+      {
+        kind: "text",
+        text: prefixAgentMessage("Canceling..."),
+      },
+    ];
+    task.status.timestamp = new Date().toISOString();
+    console.log("Task cancellation requested:", { taskId, fromState });
+    scheduleCancellationStop(taskId);
+  }
 
-  console.log("Task transitioned:", {
-    taskId,
-    fromState,
-    toState: cancelState,
-  });
-
+  saveData();
   const formattedTask = formatAgentConnectorTaskResponse(task, task.contextId);
   console.log("JSON-RPC tasks/cancel response:", {
     taskId: task.id,
@@ -394,9 +401,101 @@ async function handleTasksCancel({
   return formattedTask;
 }
 
+/**
+ * Simulate the Remote Agent runtime acknowledging a stop request: after a
+ * short delay, transition the task to terminal `canceled` and persist it.
+ * Polling clients observe this on a later `tasks/get` (see
+ * docs/adr/0019-canceled-is-emitted-after-runtime-stop.md).
+ */
+function scheduleCancellationStop(taskId: string): void {
+  setTimeout(() => {
+    const task = tasks.get(taskId);
+    if (!task || isTerminalState(task.status.state)) {
+      return;
+    }
+
+    task.status.state = "canceled";
+    task.status.message.parts = [
+      {
+        kind: "text",
+        text: prefixAgentMessage("This task has been canceled."),
+      },
+    ];
+    task.status.timestamp = new Date().toISOString();
+    saveData();
+
+    console.log("Task transitioned:", {
+      taskId,
+      toState: "canceled",
+    });
+  }, CANCELLATION_STOP_DELAY_MS);
+}
+
+/**
+ * Stop an actively streaming Simulation Scenario and coordinate cancellation
+ * over its open SSE connection: stop scenario playback, report cancellation
+ * progress as a Content Update, then emit terminal `canceled` and end the
+ * stream (see docs/adr/0019-canceled-is-emitted-after-runtime-stop.md).
+ * Artifacts already streamed to this connection stay in its event history -
+ * cancellation only appends further events, it never rewrites past ones
+ * (see docs/adr/0016-artifacts-survive-task-interruptions.md).
+ */
+function stopActiveStreamWithCancellation(
+  task: Task,
+  activeStream: ActiveScenarioStream,
+): void {
+  activeStream.cancelPlayback();
+  activeScenarioStreams.delete(task.id);
+
+  const cancelingEvent: MappedEvent = {
+    kind: "content-update",
+    message: "Canceling...",
+  };
+  applyMappedEventToTask(cancelingEvent, task, activeStream.context);
+  writeSseEvent(
+    activeStream.res,
+    activeStream.requestId,
+    buildStreamResponseFromEvent(cancelingEvent, task),
+  );
+
+  const canceledEvent: MappedEvent = {
+    kind: "task-state-update",
+    state: "canceled",
+    final: true,
+    message: "This task has been canceled.",
+  };
+  applyMappedEventToTask(canceledEvent, task, activeStream.context);
+  writeSseEvent(
+    activeStream.res,
+    activeStream.requestId,
+    buildStreamResponseFromEvent(canceledEvent, task),
+  );
+  activeStream.res.end();
+
+  console.log("Task transitioned:", {
+    taskId: task.id,
+    toState: "canceled",
+  });
+}
+
 // ============================================================================
 // SSE Streaming Utilities
 // ============================================================================
+
+/**
+ * A Simulation Scenario currently being streamed to an open SSE connection
+ * for a task, keyed by taskId. Lets `tasks/cancel` stop an actively running
+ * simulated task's scenario playback and end its stream with a coordinated
+ * `canceled`, instead of only affecting tasks reachable by polling (see
+ * docs/adr/0019-canceled-is-emitted-after-runtime-stop.md).
+ */
+interface ActiveScenarioStream {
+  cancelPlayback: () => void;
+  res: import("express").Response;
+  requestId: string;
+  context: AgentContext;
+}
+const activeScenarioStreams = new Map<string, ActiveScenarioStream>();
 
 /**
  * Write a single SSE event to the response stream.
@@ -485,7 +584,7 @@ function streamScenarioSteps(
   allSteps: ScenarioStep[],
   steps: ScenarioStep[],
 ): void {
-  runScenario(steps, (event, step) => {
+  const playback = runScenario(steps, (event, step) => {
     if (step.waitForUserInput) {
       task.pausedAtStepIndex = allSteps.indexOf(step) + 1;
     }
@@ -500,8 +599,16 @@ function streamScenarioSteps(
     });
 
     if (step.final || step.waitForUserInput) {
+      activeScenarioStreams.delete(task.id);
       res.end();
     }
+  });
+
+  activeScenarioStreams.set(task.id, {
+    cancelPlayback: playback.cancel,
+    res,
+    requestId,
+    context,
   });
 }
 

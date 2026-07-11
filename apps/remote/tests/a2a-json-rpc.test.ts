@@ -133,6 +133,95 @@ async function postJsonRpcStreaming(body: unknown): Promise<unknown[]> {
   }
 }
 
+/**
+ * Post a streaming (SSE) JSON-RPC request and collect every parsed
+ * `data: <json>` event until the response closes, invoking `trigger.onMatch`
+ * exactly once, mid-stream, as soon as an event satisfying `trigger.matches`
+ * is read - used to exercise cancelling a task while its SSE scenario
+ * playback is still in progress.
+ */
+async function postJsonRpcStreamingWithSideEffect(
+  body: unknown,
+  trigger: {
+    matches: (event: unknown) => boolean;
+    onMatch: (event: unknown, taskId: string) => Promise<void>;
+  },
+): Promise<unknown[]> {
+  const { createServer } = await import("node:http");
+
+  const server = createServer(app);
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") {
+    server.close();
+    throw new Error("Could not start test server");
+  }
+
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/a2a/json-rpc`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "text/event-stream",
+          authorization: "Bearer test-fit",
+        },
+        body: JSON.stringify(body),
+      },
+    );
+
+    if (!response.body) {
+      throw new Error("Streaming response had no body");
+    }
+
+    const events: unknown[] = [];
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let taskId: string | undefined;
+    let triggered = false;
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+
+      let boundary = buffer.indexOf("\n\n");
+      while (boundary !== -1) {
+        const rawEvent = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        const dataLine = rawEvent
+          .split("\n")
+          .find((line) => line.startsWith("data: "));
+        if (dataLine) {
+          const parsed = JSON.parse(dataLine.slice("data: ".length));
+          events.push(parsed);
+
+          const maybeTaskId = (
+            parsed as { result?: { task?: { id?: string } } }
+          ).result?.task?.id;
+          if (maybeTaskId) {
+            taskId = maybeTaskId;
+          }
+
+          if (!triggered && taskId && trigger.matches(parsed)) {
+            triggered = true;
+            await trigger.onMatch(parsed, taskId);
+          }
+        }
+        boundary = buffer.indexOf("\n\n");
+      }
+    }
+
+    return events;
+  } finally {
+    server.close();
+  }
+}
+
 describe("A2A JSON-RPC protocol contract", () => {
   beforeEach(() => {
     validateAuthHeader.mockReset();
@@ -237,7 +326,7 @@ describe("A2A JSON-RPC protocol contract", () => {
     });
   });
 
-  it("accepts JSON-RPC 2.0 tasks/cancel with the specified taskId parameter", async () => {
+  it("accepts JSON-RPC 2.0 tasks/cancel with the specified taskId parameter and reports cancellation progress instead of an immediate terminal state", async () => {
     const createdResponse = await postJsonRpc({
       jsonrpc: "2.0",
       id: "req-create",
@@ -260,7 +349,12 @@ describe("A2A JSON-RPC protocol contract", () => {
       result: {
         id: createdBody.result.id,
         kind: "task",
-        status: { state: "canceled" },
+        status: {
+          state: "working",
+          message: {
+            parts: [{ text: expect.stringContaining("Canceling...") }],
+          },
+        },
       },
     });
   });
@@ -1058,5 +1152,196 @@ describe("A2A JSON-RPC terminal outcome semantics", () => {
     expect(first.result.task.status.message.parts[0].text).toContain(
       "repository",
     );
+  });
+});
+
+describe("A2A JSON-RPC cancellation ordering", () => {
+  beforeEach(() => {
+    validateAuthHeader.mockReset();
+    validateAuthHeader.mockResolvedValue({
+      isErr: () => false,
+      value: fitPayload,
+    });
+    tasks.clear();
+    contexts.clear();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function wait(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  it("emits terminal canceled only after the simulated runtime stop completes, once polled again", async () => {
+    const createdResponse = await postJsonRpc({
+      jsonrpc: "2.0",
+      id: "req-create",
+      method: "message/send",
+      params: messageSendParams,
+    });
+    const createdBody = await createdResponse.json();
+
+    await postJsonRpc({
+      jsonrpc: "2.0",
+      id: "req-cancel",
+      method: "tasks/cancel",
+      params: { taskId: createdBody.result.id },
+    });
+
+    await wait(150);
+
+    const response = await postJsonRpc({
+      jsonrpc: "2.0",
+      id: "req-get-after-cancel",
+      method: "tasks/get",
+      params: { taskId: createdBody.result.id },
+    });
+
+    await expect(response.json()).resolves.toMatchObject({
+      jsonrpc: "2.0",
+      id: "req-get-after-cancel",
+      result: {
+        id: createdBody.result.id,
+        status: {
+          state: "canceled",
+          message: {
+            parts: [{ text: expect.stringContaining("canceled") }],
+          },
+        },
+      },
+    });
+  });
+
+  it("returns the appropriate JSON-RPC error when canceling a task already in a non-cancellable terminal state", async () => {
+    const rejectedEvents = await postJsonRpcStreaming({
+      jsonrpc: "2.0",
+      id: "req-stream-reject-for-cancel",
+      method: "message/send",
+      params: {
+        ...messageSendParams,
+        message: {
+          ...messageSendParams.message,
+          parts: [
+            {
+              text: "Please reject immediately, this is out of scope.",
+              kind: "text",
+            },
+          ],
+        },
+      },
+    });
+    const rejectedTaskId = (
+      rejectedEvents[0] as { result: { task: { id: string } } }
+    ).result.task.id;
+
+    const response = await postJsonRpc({
+      jsonrpc: "2.0",
+      id: "req-cancel-rejected",
+      method: "tasks/cancel",
+      params: { taskId: rejectedTaskId },
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      jsonrpc: "2.0",
+      id: "req-cancel-rejected",
+      error: {
+        code: -32002,
+        message: "Task cannot be canceled from current state",
+      },
+    });
+  });
+
+  it("stops an in-progress streamed scenario, reports Canceling progress, and ends with canceled without retracting the artifact already streamed", async () => {
+    type ArtifactUpdateEnvelope = {
+      result: {
+        artifactUpdate?: { artifact: { artifactId: string } };
+      };
+    };
+    type StatusUpdateEnvelope = {
+      result: {
+        statusUpdate?: {
+          status: { state: string };
+          message?: { parts: Array<{ text: string }> };
+          final: boolean;
+        };
+      };
+    };
+
+    let cancelResult: { status: { state: string } } | undefined;
+
+    const events = await postJsonRpcStreamingWithSideEffect(
+      {
+        jsonrpc: "2.0",
+        id: "req-stream-cancel-midstream",
+        method: "message/send",
+        params: {
+          ...messageSendParams,
+          message: {
+            ...messageSendParams.message,
+            parts: [
+              {
+                text: "Start the long-running repository migration.",
+                kind: "text",
+              },
+            ],
+          },
+        },
+      },
+      {
+        matches: (event) =>
+          (event as ArtifactUpdateEnvelope).result.artifactUpdate?.artifact
+            .artifactId === "migration-progress-1",
+        onMatch: async (_event, taskId) => {
+          const cancelResponse = await postJsonRpc({
+            jsonrpc: "2.0",
+            id: "req-cancel-midstream",
+            method: "tasks/cancel",
+            params: { taskId },
+          });
+          const cancelBody = await cancelResponse.json();
+          cancelResult = cancelBody.result;
+        },
+      },
+    );
+
+    const artifactIds = events
+      .map(
+        (event) =>
+          (event as ArtifactUpdateEnvelope).result.artifactUpdate?.artifact
+            .artifactId,
+      )
+      .filter(Boolean);
+    expect(artifactIds).toContain("migration-progress-1");
+
+    const canceledIndex = events.findIndex(
+      (event) =>
+        (event as StatusUpdateEnvelope).result.statusUpdate?.status.state ===
+        "canceled",
+    );
+    const cancelingIndex = events.findIndex((event) =>
+      (
+        event as StatusUpdateEnvelope
+      ).result.statusUpdate?.message?.parts[0]?.text.includes("Canceling..."),
+    );
+    const completedIndex = events.findIndex(
+      (event) =>
+        (event as StatusUpdateEnvelope).result.statusUpdate?.status.state ===
+        "completed",
+    );
+
+    expect(cancelingIndex).toBeGreaterThanOrEqual(0);
+    expect(canceledIndex).toBe(events.length - 1);
+    expect(cancelingIndex).toBeLessThan(canceledIndex);
+    expect(completedIndex).toBe(-1);
+
+    const last = events[events.length - 1] as StatusUpdateEnvelope;
+    expect(last.result.statusUpdate?.final).toBe(true);
+    expect(cancelResult?.status.state).toBe("canceled");
   });
 });

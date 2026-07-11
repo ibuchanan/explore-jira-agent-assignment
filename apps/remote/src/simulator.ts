@@ -12,19 +12,29 @@
 import type { Artifact, MappedEvent, TaskState } from "forge-ahead";
 import type { ScenarioStep } from "./scenarios.js";
 
+export interface ScenarioPlayback {
+  /** Stop scheduling further steps. Safe to call after the scenario has already finished. */
+  cancel: () => void;
+}
+
 export function runScenario(
   steps: ScenarioStep[],
   onEvent: (event: MappedEvent, step: ScenarioStep) => void,
-): void {
+): ScenarioPlayback {
   let index = 0;
+  let canceled = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
 
   function scheduleNext(): void {
-    if (index >= steps.length) {
+    if (canceled || index >= steps.length) {
       return;
     }
     const step = steps[index++];
 
-    setTimeout(() => {
+    timer = setTimeout(() => {
+      if (canceled) {
+        return;
+      }
       onEvent(mapScenarioStep(step), step);
       if (step.final || step.waitForUserInput) {
         return;
@@ -34,6 +44,13 @@ export function runScenario(
   }
 
   scheduleNext();
+
+  return {
+    cancel: () => {
+      canceled = true;
+      clearTimeout(timer);
+    },
+  };
 }
 
 export function mapScenarioStep(step: ScenarioStep): MappedEvent {
