@@ -949,3 +949,114 @@ describe("A2A JSON-RPC input-required clarification pause and resumption", () =>
     ).toBe(true);
   });
 });
+
+describe("A2A JSON-RPC terminal outcome semantics", () => {
+  beforeEach(() => {
+    validateAuthHeader.mockReset();
+    validateAuthHeader.mockResolvedValue({
+      isErr: () => false,
+      value: fitPayload,
+    });
+    tasks.clear();
+    contexts.clear();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  type StatusUpdateEnvelope = {
+    result: {
+      statusUpdate?: {
+        status: { state: string };
+        message?: { parts: Array<{ text: string }> };
+        final: boolean;
+      };
+    };
+  };
+  type ArtifactUpdateEnvelope = {
+    result: {
+      artifactUpdate?: {
+        artifact: { metadata?: { kind?: string } };
+      };
+    };
+  };
+
+  it("ends the stream with a failed terminal state and a diagnostic Artifact when the matched scenario models unrecoverable repository access loss after acceptance", async () => {
+    const events = (await postJsonRpcStreaming({
+      jsonrpc: "2.0",
+      id: "req-stream-failed",
+      method: "message/send",
+      params: {
+        ...messageSendParams,
+        message: {
+          ...messageSendParams.message,
+          parts: [
+            {
+              text: "Push the fix to the archived-reports repository.",
+              kind: "text",
+            },
+          ],
+        },
+      },
+    })) as Array<StatusUpdateEnvelope | ArtifactUpdateEnvelope>;
+
+    const failedIndex = events.findIndex(
+      (event) =>
+        (event as StatusUpdateEnvelope).result.statusUpdate?.status.state ===
+        "failed",
+    );
+    const diagnosticArtifactIndex = events.findIndex(
+      (event) =>
+        (event as ArtifactUpdateEnvelope).result.artifactUpdate?.artifact
+          .metadata?.kind === "patch",
+    );
+    const last = events[events.length - 1] as StatusUpdateEnvelope;
+
+    expect(failedIndex).toBeGreaterThanOrEqual(0);
+    expect(diagnosticArtifactIndex).toBeGreaterThanOrEqual(0);
+    expect(diagnosticArtifactIndex).toBeLessThan(failedIndex);
+    expect(last.result.statusUpdate?.status.state).toBe("failed");
+    expect(last.result.statusUpdate?.final).toBe(true);
+  });
+
+  it("begins streaming with an immediate rejected terminal state when the matched scenario models unrecoverable missing repository access before acceptance", async () => {
+    const events = await postJsonRpcStreaming({
+      jsonrpc: "2.0",
+      id: "req-stream-repo-access-rejected",
+      method: "message/send",
+      params: {
+        ...messageSendParams,
+        message: {
+          ...messageSendParams.message,
+          parts: [
+            {
+              text: "Update the deleted legacy-reports repository.",
+              kind: "text",
+            },
+          ],
+        },
+      },
+    });
+
+    const first = events[0] as {
+      result: {
+        task: {
+          status: {
+            state: string;
+            message: { parts: Array<{ text: string }> };
+          };
+        };
+      };
+    };
+
+    expect(events).toHaveLength(1);
+    expect(first.result.task.status.state).toBe("rejected");
+    expect(first.result.task.status.message.parts[0].text).toContain(
+      "repository",
+    );
+  });
+});
