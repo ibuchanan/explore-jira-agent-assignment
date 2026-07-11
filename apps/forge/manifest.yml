@@ -44,7 +44,7 @@ remotes:
   - key: backend-service
     baseUrl: ${REMOTE_SERVICE_URL}
     operations:
-      # compute: required for invokeRemote to work (task traffic, SSE streaming)
+      # compute: required for Forge endpoint traffic to reach the remote backend
       - compute
       # storage: declares that end-user data (issue IDs, account IDs, cloud IDs)
       # is egressed to and stored on this remote backend, for data-residency

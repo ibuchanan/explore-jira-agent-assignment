@@ -30,6 +30,12 @@ describe("Forge Architecture", () => {
   // Cache projectFiles() result to speed up tests
   // This scans the filesystem once instead of per-test
   let cachedProjectFiles: ProjectFiles;
+  const hasResolverSource = directoryExists(join("src", "resolvers"));
+  const hasForgeBackendFunctionSource = [
+    join("src", "resolvers"),
+    join("src", "external"),
+    join("src", "import-lifecycle"),
+  ].some((dir) => directoryExists(dir));
 
   beforeAll(() => {
     cachedProjectFiles = projectFiles();
@@ -70,28 +76,33 @@ describe("Forge Architecture", () => {
       },
     );
 
-    it("resolvers should not import any modules that use @forge/bridge", async () => {
-      // General rule: Resolver files shouldn't import from any module that
-      // depends on @forge/bridge (client-side only package). This prevents
-      // resolvers from accidentally importing client-side code.
-      const rule = cachedProjectFiles
-        .inFolder("src/resolvers/**")
-        .should()
-        .adhereTo((file) => {
-          const importedModules = findLocalImports(parseSourceFile(file.path));
+    it.skipIf(!hasResolverSource)(
+      "resolvers should not import any modules that use @forge/bridge",
+      async () => {
+        // General rule: Resolver files shouldn't import from any module that
+        // depends on @forge/bridge (client-side only package). This prevents
+        // resolvers from accidentally importing client-side code.
+        const rule = cachedProjectFiles
+          .inFolder("src/resolvers/**")
+          .should()
+          .adhereTo((file) => {
+            const importedModules = findLocalImports(
+              parseSourceFile(file.path),
+            );
 
-          for (const importedModule of importedModules) {
-            // Resolvers should never import from frontend
-            if (importedModule.includes("frontend")) {
-              return false;
+            for (const importedModule of importedModules) {
+              // Resolvers should never import from frontend
+              if (importedModule.includes("frontend")) {
+                return false;
+              }
             }
-          }
 
-          return true;
-        }, "Resolvers should not import from frontend modules (may depend on @forge/bridge)");
+            return true;
+          }, "Resolvers should not import from frontend modules (may depend on @forge/bridge)");
 
-      await expect(rule).toPassAsync();
-    });
+        await expect(rule).toPassAsync();
+      },
+    );
   });
 
   describe("structural rules", () => {
@@ -105,7 +116,7 @@ describe("Forge Architecture", () => {
       await expect(rule).toPassAsync();
     });
 
-    it.skipIf(!directoryExists(join("src", "frontend")))(
+    it.skipIf(!directoryExists(join("src", "frontend")) || !hasResolverSource)(
       "frontend should not import from resolvers",
       async () => {
         // General rule: Frontend code (UI Kit) should never import from
@@ -120,7 +131,7 @@ describe("Forge Architecture", () => {
       },
     );
 
-    it.skipIf(!directoryExists(join("src", "frontend")))(
+    it.skipIf(!directoryExists(join("src", "frontend")) || !hasResolverSource)(
       "resolvers should not import from frontend",
       async () => {
         // General rule: Resolver functions (backend) should never import
@@ -137,43 +148,46 @@ describe("Forge Architecture", () => {
   });
 
   describe("egress and fetch boundaries", () => {
-    it("backend code should use api.fetch() for external HTTP calls", async () => {
-      // General rule: Backend functions (resolvers, queue consumers) that make
-      // external HTTP calls must use api.fetch() from @forge/api, not the
-      // native fetch() API. The native fetch() is not available in the Forge
-      // runtime and will cause failures at runtime.
-      //
-      // This rule applies to:
-      // - src/resolvers/** (resolver functions)
-      // - src/external/** (external API clients used by resolvers/queue consumers)
-      // - src/import-lifecycle/** (import lifecycle functions running on Forge runtime)
-      const rule = cachedProjectFiles
-        .inFolder("src/{resolvers,external,import-lifecycle}/**")
-        .should()
-        .adhereTo((file) => {
-          if (file.path.includes(".test.") || file.path.includes(".spec.")) {
-            return true;
-          }
+    it.skipIf(!hasForgeBackendFunctionSource)(
+      "backend code should use api.fetch() for external HTTP calls",
+      async () => {
+        // General rule: Backend functions (resolvers, queue consumers) that make
+        // external HTTP calls must use api.fetch() from @forge/api, not the
+        // native fetch() API. The native fetch() is not available in the Forge
+        // runtime and will cause failures at runtime.
+        //
+        // This rule applies to:
+        // - src/resolvers/** (resolver functions)
+        // - src/external/** (external API clients used by resolvers/queue consumers)
+        // - src/import-lifecycle/** (import lifecycle functions running on Forge runtime)
+        const rule = cachedProjectFiles
+          .inFolder("src/{resolvers,external,import-lifecycle}/**")
+          .should()
+          .adhereTo((file) => {
+            if (file.path.includes(".test.") || file.path.includes(".spec.")) {
+              return true;
+            }
 
-          const sourceFile = parseSourceFile(file.path);
-          const nativeFetchCalls = findCallExpressions(
-            sourceFile,
-            (callName, node) => {
-              if (callName !== "fetch") {
-                return false;
-              }
-              return !(
-                ts.isPropertyAccessExpression(node.expression) &&
-                node.expression.expression.getText(sourceFile) === "api"
-              );
-            },
-          );
+            const sourceFile = parseSourceFile(file.path);
+            const nativeFetchCalls = findCallExpressions(
+              sourceFile,
+              (callName, node) => {
+                if (callName !== "fetch") {
+                  return false;
+                }
+                return !(
+                  ts.isPropertyAccessExpression(node.expression) &&
+                  node.expression.expression.getText(sourceFile) === "api"
+                );
+              },
+            );
 
-          return nativeFetchCalls.length === 0;
-        }, "Backend code should use api.fetch() from @forge/api for external HTTP calls, not native fetch()");
+            return nativeFetchCalls.length === 0;
+          }, "Backend code should use api.fetch() from @forge/api for external HTTP calls, not native fetch()");
 
-      await expect(rule).toPassAsync();
-    });
+        await expect(rule).toPassAsync();
+      },
+    );
   });
 
   describe("storage API boundaries", () => {

@@ -28,10 +28,6 @@
     "todo": "grep -rn 'TODO' --exclude='package.json' . --color=auto || echo 'No TODOs found!'",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
-    "@forge/api": "^8.0.0",
-    "forge-ahead": "*"
-  },
   "devDependencies": {
     "@types/node": "24",
     "archunit": "^2.3",
