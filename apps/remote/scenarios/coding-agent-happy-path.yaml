@@ -19,11 +19,42 @@ steps:
   - event: status-update
     message: "Drafting a code change that reorders the session validation."
     delayMs: 20
+  - event: artifact-update
+    artifact:
+      artifactId: patch-1
+      name: "login-session-order.patch"
+      description: "Reorders session validation to run after the token refresh."
+      metadata:
+        kind: patch
+      parts:
+        - kind: text
+          text: "--- a/session.ts\n+++ b/session.ts\n@@ refresh before validate"
+    delayMs: 20
+  - event: artifact-update
+    artifact:
+      artifactId: patch-1
+      parts:
+        - kind: text
+          text: "\n@@ trailing whitespace cleanup"
+    append: true
+    lastChunk: true
+    delayMs: 20
   - event: status-update
     message: "Tool: running the checkout test suite against the change."
     delayMs: 20
   - event: status-update
     message: "Tool result: all 42 tests passed."
+    delayMs: 20
+  - event: artifact-update
+    artifact:
+      artifactId: implementation-summary-1
+      name: "Login bug fix summary"
+      description: "Reordered session validation so the token refresh runs first, verified by the checkout test suite."
+      metadata:
+        kind: implementation-summary
+      parts:
+        - kind: text
+          text: "Reordered session validation so the token refresh runs first, verified by the checkout test suite."
     delayMs: 20
   - event: status-update
     state: completed

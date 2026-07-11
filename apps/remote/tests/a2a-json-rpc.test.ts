@@ -532,6 +532,135 @@ describe("A2A JSON-RPC streaming message/send (Simulation Scenario driven)", () 
   });
 });
 
+describe("A2A JSON-RPC coding-agent artifact streaming", () => {
+  beforeEach(() => {
+    validateAuthHeader.mockReset();
+    validateAuthHeader.mockResolvedValue({
+      isErr: () => false,
+      value: fitPayload,
+    });
+    tasks.clear();
+    contexts.clear();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function codingAgentMessageSendParams(): typeof messageSendParams {
+    return {
+      ...messageSendParams,
+      message: {
+        ...messageSendParams.message,
+        parts: [{ text: "Fix the login bug.", kind: "text" }],
+      },
+    };
+  }
+
+  type TaskEnvelope = { result: { task: { id: string; contextId: string } } };
+  type ArtifactUpdateEnvelope = {
+    result: {
+      artifactUpdate?: {
+        taskId: string;
+        contextId: string;
+        artifact: {
+          artifactId: string;
+          name?: string;
+          description?: string;
+          metadata?: { kind?: string };
+        };
+        append?: boolean;
+        lastChunk?: boolean;
+      };
+    };
+  };
+
+  it("streams artifact-update events whose taskId and contextId match the streamed task", async () => {
+    const events = (await postJsonRpcStreaming({
+      jsonrpc: "2.0",
+      id: "req-stream-artifacts",
+      method: "message/send",
+      params: codingAgentMessageSendParams(),
+    })) as Array<TaskEnvelope | ArtifactUpdateEnvelope>;
+
+    const task = (events[0] as TaskEnvelope).result.task;
+    const artifactUpdates = events
+      .map((event) => (event as ArtifactUpdateEnvelope).result.artifactUpdate)
+      .filter((update): update is NonNullable<typeof update> =>
+        Boolean(update),
+      );
+
+    expect(artifactUpdates.length).toBeGreaterThan(0);
+    for (const update of artifactUpdates) {
+      expect(update.taskId).toBe(task.id);
+      expect(update.contextId).toBe(task.contextId);
+    }
+  });
+
+  it("streams the implementation-summary artifact with display text and kind metadata before the final completed status update", async () => {
+    const events = (await postJsonRpcStreaming({
+      jsonrpc: "2.0",
+      id: "req-stream-summary-artifact",
+      method: "message/send",
+      params: codingAgentMessageSendParams(),
+    })) as Array<
+      | ArtifactUpdateEnvelope
+      | {
+          result: {
+            statusUpdate?: { status: { state: string }; final: boolean };
+          };
+        }
+    >;
+
+    const summaryIndex = events.findIndex(
+      (event) =>
+        (event as ArtifactUpdateEnvelope).result.artifactUpdate?.artifact
+          .metadata?.kind === "implementation-summary",
+    );
+    const completedIndex = events.findIndex(
+      (event) =>
+        (
+          event as {
+            result: {
+              statusUpdate?: { status: { state: string }; final: boolean };
+            };
+          }
+        ).result.statusUpdate?.status.state === "completed",
+    );
+
+    const summaryUpdate = (events[summaryIndex] as ArtifactUpdateEnvelope)
+      .result.artifactUpdate;
+    expect(summaryUpdate?.artifact.name).toBeTruthy();
+    expect(summaryUpdate?.artifact.description).toBeTruthy();
+    expect(summaryIndex).toBeGreaterThanOrEqual(0);
+    expect(summaryIndex).toBeLessThan(completedIndex);
+  });
+
+  it("streams a chunked patch artifact's append and lastChunk fields over the wire", async () => {
+    const events = (await postJsonRpcStreaming({
+      jsonrpc: "2.0",
+      id: "req-stream-chunked-artifact",
+      method: "message/send",
+      params: codingAgentMessageSendParams(),
+    })) as ArtifactUpdateEnvelope[];
+
+    const patchChunks = events
+      .map((event) => event.result.artifactUpdate)
+      .filter(
+        (update): update is NonNullable<typeof update> =>
+          update?.artifact.artifactId === "patch-1",
+      );
+
+    expect(patchChunks).toHaveLength(2);
+    expect(patchChunks[0].lastChunk).toBeFalsy();
+    expect(patchChunks[1].append).toBe(true);
+    expect(patchChunks[1].lastChunk).toBe(true);
+  });
+});
+
 describe("A2A JSON-RPC auth-required approval pause and resumption", () => {
   beforeEach(() => {
     validateAuthHeader.mockReset();
@@ -751,9 +880,7 @@ describe("A2A JSON-RPC input-required clarification pause and resumption", () =>
       params: {
         message: {
           role: "user",
-          parts: [
-            { text: "Guest checkout must be supported.", kind: "text" },
-          ],
+          parts: [{ text: "Guest checkout must be supported.", kind: "text" }],
           messageId: "resume-msg-1",
           taskId: pausedTask.id,
           contextId: pausedTask.contextId,
@@ -799,9 +926,7 @@ describe("A2A JSON-RPC input-required clarification pause and resumption", () =>
       params: {
         message: {
           role: "user",
-          parts: [
-            { text: "Guest checkout must be supported.", kind: "text" },
-          ],
+          parts: [{ text: "Guest checkout must be supported.", kind: "text" }],
           messageId: "resume-msg-1",
           taskId: pausedTaskId,
           contextId,
@@ -815,9 +940,9 @@ describe("A2A JSON-RPC input-required clarification pause and resumption", () =>
 
     const context = contexts.get(contextId);
     const messageTexts = context?.messages.map((m) => m.text) ?? [];
-    expect(
-      messageTexts.some((text) => text.includes("Input required:")),
-    ).toBe(true);
+    expect(messageTexts.some((text) => text.includes("Input required:"))).toBe(
+      true,
+    );
     expect(messageTexts).toContain("Guest checkout must be supported.");
     expect(
       messageTexts.some((text) => text.includes("Updated the checkout flow")),

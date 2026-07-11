@@ -41,6 +41,8 @@ export function mapScenarioStep(step: ScenarioStep): MappedEvent {
     return {
       kind: "artifact-update",
       artifact: step.artifact as unknown as Artifact,
+      ...(step.append !== undefined && { append: step.append }),
+      ...(step.lastChunk !== undefined && { lastChunk: step.lastChunk }),
     };
   }
 

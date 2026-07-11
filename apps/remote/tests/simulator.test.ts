@@ -47,6 +47,22 @@ describe("mapScenarioStep", () => {
       artifact: { artifactId: "patch-1", name: "patch.diff" },
     });
   });
+
+  it("maps an artifact-update step's append and lastChunk fields onto the mapped event", () => {
+    const step: ScenarioStep = {
+      event: "artifact-update",
+      artifact: { artifactId: "patch-1", name: "patch.diff" },
+      append: true,
+      lastChunk: false,
+    };
+
+    expect(mapScenarioStep(step)).toEqual({
+      kind: "artifact-update",
+      artifact: { artifactId: "patch-1", name: "patch.diff" },
+      append: true,
+      lastChunk: false,
+    });
+  });
 });
 
 describe("runScenario", () => {

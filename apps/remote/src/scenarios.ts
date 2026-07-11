@@ -26,6 +26,10 @@ export interface ScenarioStep {
   final?: boolean;
   message?: string;
   artifact?: Record<string, unknown>;
+  /** When true, append this artifact-update step's parts to the previous chunk rather than replacing it. */
+  append?: boolean;
+  /** When true, this artifact-update step is the final chunk of the artifact. */
+  lastChunk?: boolean;
   delayMs?: number;
   waitForUserInput?: boolean;
 }

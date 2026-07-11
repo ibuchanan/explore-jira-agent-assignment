@@ -40,6 +40,12 @@ function contentUpdateMessages(scenario: Scenario): string[] {
     .map((event) => (event as { message: string }).message);
 }
 
+function artifactUpdateEvents(scenario: Scenario) {
+  return scenario.steps
+    .map((step) => mapScenarioStep(step))
+    .filter((event) => event.kind === "artifact-update");
+}
+
 describe("Simulated Coding Remote Agent happy path scenario", () => {
   it("is matched from coding-task starting text instead of the Default Scenario", () => {
     const scenario = matchCodingAgentScenario();
@@ -77,6 +83,45 @@ describe("Simulated Coding Remote Agent happy path scenario", () => {
 
     expect(toolInvocationIndex).toBeGreaterThanOrEqual(0);
     expect(toolResultIndex).toBeGreaterThan(toolInvocationIndex);
+  });
+
+  it("emits a reviewable implementation-summary artifact with display text and kind metadata, ahead of the brief completed status message", () => {
+    const scenario = matchCodingAgentScenario();
+    const artifacts = artifactUpdateEvents(scenario);
+    const summaryArtifact = artifacts.find(
+      (event) =>
+        (event as { artifact: { metadata?: { kind?: string } } }).artifact
+          .metadata?.kind === "implementation-summary",
+    ) as { artifact: { name?: string; description?: string } } | undefined;
+
+    expect(summaryArtifact).toBeTruthy();
+    expect(summaryArtifact?.artifact.name).toBeTruthy();
+    expect(summaryArtifact?.artifact.description).toBeTruthy();
+
+    const artifactStepIndex = scenario.steps.findIndex(
+      (step) =>
+        step.event === "artifact-update" &&
+        (step.artifact?.metadata as { kind?: string } | undefined)?.kind ===
+          "implementation-summary",
+    );
+    const completedStepIndex = scenario.steps.findIndex(
+      (step) => step.state === "completed",
+    );
+    expect(artifactStepIndex).toBeLessThan(completedStepIndex);
+  });
+
+  it("streams a patch artifact as two chunks sharing one artifactId, the first not-yet-final and the second appended and final", () => {
+    const scenario = matchCodingAgentScenario();
+    const patchChunks = artifactUpdateEvents(scenario).filter(
+      (event) =>
+        (event as { artifact: { artifactId: string } }).artifact.artifactId ===
+        "patch-1",
+    ) as Array<{ append?: boolean; lastChunk?: boolean }>;
+
+    expect(patchChunks).toHaveLength(2);
+    expect(patchChunks[0].lastChunk).toBeFalsy();
+    expect(patchChunks[1].append).toBe(true);
+    expect(patchChunks[1].lastChunk).toBe(true);
   });
 
   it("ends with a brief completed lifecycle message", () => {

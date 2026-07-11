@@ -451,6 +451,8 @@ function buildStreamResponseFromEvent(
       contextId: task.contextId,
       artifact: event.artifact,
       kind: "artifact-update",
+      ...(event.append !== undefined && { append: event.append }),
+      ...(event.lastChunk !== undefined && { lastChunk: event.lastChunk }),
     };
     return { artifactUpdate };
   }
