@@ -14,12 +14,17 @@ import {
   type MappedEvent,
   type TaskState,
 } from "forge-ahead";
+import {
+  createA2aJsonRpcSessionStream,
+  startA2aJsonRpcStream,
+  writeA2aJsonRpcStreamError,
+  writeA2aJsonRpcTaskSnapshot,
+} from "./a2aStream.js";
 import { type AuthenticatedRequest, authMiddleware } from "./auth.js";
 import { loadScenarios, matchScenario } from "./scenarios.js";
 import {
   prefixAgentMessage,
   SimulationScenarioSessionRuntime,
-  type SimulationScenarioSessionStream,
 } from "./scenarioSessionRuntime.js";
 import { isResumableTaskState } from "./scenarioSession.js";
 import {
@@ -32,54 +37,6 @@ import {
   type Task,
   tasks,
 } from "./storage.js";
-
-// ---------------------------------------------------------------------------
-// Local streaming types
-// These match the shapes exported from forge-ahead but are defined here so
-// the remote app compiles independently without requiring a package build step.
-// ---------------------------------------------------------------------------
-
-interface StreamingMessage {
-  role: "user" | "agent";
-  parts: Array<{ kind: "text" | "data"; text?: string; data?: unknown }>;
-  messageId: string;
-  taskId?: string;
-  contextId?: string;
-  kind: "message";
-}
-
-interface TaskStatusUpdateEvent {
-  taskId: string;
-  contextId: string;
-  status: { state: TaskState; timestamp?: string };
-  message?: StreamingMessage;
-  kind: "status-update";
-  final: boolean;
-}
-
-interface StreamArtifact {
-  artifactId: string;
-  name?: string;
-  description?: string;
-  parts: Array<{ kind: "text" | "data"; text?: string; data?: unknown }>;
-  metadata?: Record<string, unknown>;
-}
-
-interface TaskArtifactUpdateEvent {
-  taskId: string;
-  contextId: string;
-  artifact: StreamArtifact;
-  append?: boolean;
-  lastChunk?: boolean;
-  kind: "artifact-update";
-}
-
-interface StreamResponse {
-  task?: unknown;
-  statusUpdate?: TaskStatusUpdateEvent;
-  message?: StreamingMessage;
-  artifactUpdate?: TaskArtifactUpdateEvent;
-}
 
 export const app = express();
 app.use(express.json());
@@ -381,76 +338,17 @@ async function handleTasksCancel({
 }
 
 // ============================================================================
-// SSE Streaming Utilities
-// ============================================================================
-
-/**
- * Write a single SSE event to the response stream.
- * Each event is a JSON-RPC 2.0 response whose `result` is a `StreamResponse`.
- */
-function writeSseEvent(
-  res: import("express").Response,
-  id: string,
-  result: StreamResponse,
-): void {
-  const payload = JSON.stringify({ jsonrpc: "2.0", id, result });
-  res.write(`data: ${payload}\n\n`);
-}
-
-/**
- * Build the SSE `StreamResponse` payload for a mapped Simulation Scenario
- * event, reading the task's current (already-applied) status.
- */
-function buildStreamResponseFromEvent(
-  event: MappedEvent,
-  task: Task,
-): StreamResponse {
-  if (event.kind === "artifact-update") {
-    const artifactUpdate: TaskArtifactUpdateEvent = {
-      taskId: task.id,
-      contextId: task.contextId,
-      artifact: event.artifact,
-      kind: "artifact-update",
-      ...(event.append !== undefined && { append: event.append }),
-      ...(event.lastChunk !== undefined && { lastChunk: event.lastChunk }),
-    };
-    return { artifactUpdate };
-  }
-
-  const statusUpdate: TaskStatusUpdateEvent = {
-    taskId: task.id,
-    contextId: task.contextId,
-    status: { state: task.status.state, timestamp: task.status.timestamp },
-    message: task.status.message,
-    kind: "status-update",
-    final: event.kind === "task-state-update" ? event.final : false,
-  };
-  return { statusUpdate };
-}
-
-function createSseSessionStream(
-  res: import("express").Response,
-  requestId: string,
-): SimulationScenarioSessionStream {
-  return {
-    emit: (event, task) => {
-      writeSseEvent(res, requestId, buildStreamResponseFromEvent(event, task));
-      console.log("Scenario event streamed:", {
-        taskId: task.id,
-        kind: event.kind,
-        state: task.status.state,
-        final: event.kind === "task-state-update" ? event.final : false,
-      });
-    },
-    close: () => {
-      res.end();
-    },
-  };
-}
-
-// ============================================================================
 // Streaming JSON-RPC Handlers
 // ============================================================================
+
+function logStreamedScenarioEvent(event: MappedEvent, task: Task): void {
+  console.log("Scenario event streamed:", {
+    taskId: task.id,
+    kind: event.kind,
+    state: task.status.state,
+    final: event.kind === "task-state-update" ? event.final : false,
+  });
+}
 
 /**
  * Handle message/send with SSE streaming response.
@@ -535,21 +433,18 @@ async function handleSendStreamingMessage(
 
   console.log("Streaming task created:", { taskId, contextId, workItemId });
 
-  // Start SSE response
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.flushHeaders();
-
-  // First event: the initial task object
-  const formattedTask = formatAgentConnectorTaskResponse(task, contextId);
-  writeSseEvent(res, requestId, { task: formattedTask as Task });
+  startA2aJsonRpcStream(res);
+  writeA2aJsonRpcTaskSnapshot(res, requestId, task);
 
   simulationScenarioSessions.attachStream(
     task,
     context,
     scenario,
-    createSseSessionStream(res, requestId),
+    createA2aJsonRpcSessionStream({
+      response: res,
+      requestId,
+      onEvent: logStreamedScenarioEvent,
+    }),
     continuation,
   );
 }
@@ -591,19 +486,18 @@ async function handleResumeStreamingMessage(
     resumedAtStepIndex,
   });
 
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.flushHeaders();
-
-  const formattedTask = formatAgentConnectorTaskResponse(task, task.contextId);
-  writeSseEvent(res, requestId, { task: formattedTask as Task });
+  startA2aJsonRpcStream(res);
+  writeA2aJsonRpcTaskSnapshot(res, requestId, task);
 
   simulationScenarioSessions.attachStream(
     task,
     context,
     scenario,
-    createSseSessionStream(res, requestId),
+    createA2aJsonRpcSessionStream({
+      response: res,
+      requestId,
+      onEvent: logStreamedScenarioEvent,
+    }),
     continuation,
   );
 }
@@ -621,27 +515,14 @@ async function handleTasksResubscribe(
   const task = tasks.get(taskId);
 
   if (!task) {
-    // Can't SSE-error cleanly, send a JSON-RPC error event and close
-    const errorPayload = JSON.stringify({
-      jsonrpc: "2.0",
-      id: requestId,
-      error: { code: -32001, message: "Task not found" },
-    });
-    res.setHeader("Content-Type", "text/event-stream");
-    res.flushHeaders();
-    res.write(`data: ${errorPayload}\n\n`);
+    startA2aJsonRpcStream(res);
+    writeA2aJsonRpcStreamError(res, requestId, -32001, "Task not found");
     res.end();
     return;
   }
 
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.flushHeaders();
-
-  // Always send the current task as the first event
-  const formattedTask = formatAgentConnectorTaskResponse(task, task.contextId);
-  writeSseEvent(res, requestId, { task: formattedTask as Task });
+  startA2aJsonRpcStream(res);
+  writeA2aJsonRpcTaskSnapshot(res, requestId, task);
 
   console.log("Resubscribe: sent current task state:", {
     taskId,
@@ -658,7 +539,11 @@ async function handleTasksResubscribe(
       task,
       context,
       scenario,
-      createSseSessionStream(res, requestId),
+      createA2aJsonRpcSessionStream({
+        response: res,
+        requestId,
+        onEvent: logStreamedScenarioEvent,
+      }),
       continuation,
     );
   } else {
