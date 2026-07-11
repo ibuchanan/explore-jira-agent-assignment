@@ -1,0 +1,3 @@
+# Reference Implementation Prioritizes Visible Logging
+
+The Reference Implementation shows and logs detailed streamed content, including Internal Thinking when the implementing Remote Agent supports that capability, because its purpose is to make the Jira-to-Remote-Agent integration visible and understandable to implementers. Additional logs are diagnostics around request handling, runtime behavior, and A2A mapping decisions, not a separate hidden event channel. This is not a recommendation that every Remote Agent should expose or log the same data; production remotes own their own visibility, logging, privacy, and retention policies.
