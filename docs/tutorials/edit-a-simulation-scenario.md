@@ -1,13 +1,17 @@
 # Tutorial: Edit a Simulation Scenario and Watch a Check Catch a Mistake
 
-In this tutorial you will run the sample's automated checks against a
-Simulation Scenario, make a small edit to that scenario's YAML, and watch
-the checks react to your change. By the end you will have seen, firsthand,
-how the streamed behavior of the sample's simulated remote agent is driven
-entirely by data files rather than by application code.
+In this tutorial 
+you will run the sample's automated checks against a Simulation Scenario, 
+make a small edit to that scenario's YAML, 
+and watch the checks react to your change. 
+By the end you will have seen 
+how the streamed behavior of the sample's simulated remote agent 
+is driven entirely by data files rather than by application code.
 
-You do not need a Jira site, a Forge deployment, or any account for this
-tutorial. Everything happens on your own machine.
+You do not need a Jira site, 
+a Forge deployment, 
+or any account for this tutorial. 
+Everything happens on your own machine.
 
 ## 1. Install dependencies
 
