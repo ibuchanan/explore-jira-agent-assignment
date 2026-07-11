@@ -11,7 +11,7 @@ import {
   matchScenario,
   type Scenario,
 } from "../src/scenarios.js";
-import { mapScenarioStep } from "../src/simulator.js";
+import { mapScenarioStep } from "../src/scenarioStepMapper.js";
 
 const SCENARIOS_DIR = path.join(process.cwd(), "scenarios");
 const CHECKOUT_TASK_TEXT =

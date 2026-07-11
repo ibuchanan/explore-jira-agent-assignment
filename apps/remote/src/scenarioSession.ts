@@ -8,7 +8,7 @@
 
 import { isTerminalState, type MappedEvent, type TaskState } from "forge-ahead";
 import type { Scenario, ScenarioStep } from "./scenarios.js";
-import { mapScenarioStep } from "./simulator.js";
+import { mapScenarioStep } from "./scenarioStepMapper.js";
 
 export type SessionEffect =
   | {
