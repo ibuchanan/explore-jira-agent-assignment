@@ -1,40 +1,24 @@
 {
   "name": "explore-jira-agent-assigment",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "license": "Apache-2.0",
   "scripts": {
-    "build": "tsc",
-    "check": "npm run test && npm run lint && npm run format:check && npm run typecheck",
+    "build": "echo 'No Forge build required'",
+    "check": "npm run lint && npm run format:check && npm run typecheck",
     "clean": "rm -rf ./dist",
-    "dev": "echo 'Not implemented'",
     "forge:deploy": "source .env && forge deploy --environment development",
     "forge:install": "source .env && forge install --site \"$SITENAME.atlassian.net\" --product jira --environment development --non-interactive",
     "forge:uninstall": "source .env && forge uninstall --site \"$SITENAME.atlassian.net\" --product jira",
     "format": "biome format --write",
     "format:check": "biome format",
-    "generate": "npm run generate:openapi && npm run generate:rovo",
-    "generate:openapi": "openapi-typescript",
-    "generate:rovo": "tsx ./scripts/actiontypes.ts && npm run format",
+    "generate": "echo 'No Forge code generation configured'",
+    "generate:openapi": "echo 'No Forge OpenAPI generation configured'",
+    "generate:rovo": "echo 'No Forge Rovo generation configured'",
     "lint": "npm run lint:check && source .env && forge lint",
     "lint:check": "biome lint",
     "lint:fix": "biome lint --write",
-    "prepare": "echo 'Not implemented'",
-    "preview": "echo 'Not implemented'",
-    "start": "echo 'Not implemented'",
-    "test": "vitest run",
-    "test:watch": "vitest watch",
-    "test:coverage": "vitest run --coverage",
     "todo": "grep -rn 'TODO' --exclude='package.json' . --color=auto || echo 'No TODOs found!'",
-    "typecheck": "tsc --noEmit"
-  },
-  "devDependencies": {
-    "@types/node": "24",
-    "archunit": "^2.3",
-    "openapi-typescript": "^7.13",
-    "tsx": "^4.21",
-    "typescript": "^5.9",
-    "vitest": "^4.1",
-    "yaml": "^2.8"
+    "typecheck": "echo 'No Forge typecheck required'"
   }
 }
