@@ -673,3 +673,154 @@ describe("A2A JSON-RPC auth-required approval pause and resumption", () => {
     ).toBe(true);
   });
 });
+
+describe("A2A JSON-RPC input-required clarification pause and resumption", () => {
+  beforeEach(() => {
+    validateAuthHeader.mockReset();
+    validateAuthHeader.mockResolvedValue({
+      isErr: () => false,
+      value: fitPayload,
+    });
+    tasks.clear();
+    contexts.clear();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function checkoutMessageSendParams(): typeof messageSendParams {
+    return {
+      ...messageSendParams,
+      message: {
+        ...messageSendParams.message,
+        parts: [
+          {
+            text: "Clarify the acceptance criteria for the checkout redesign.",
+            kind: "text",
+          },
+        ],
+      },
+    };
+  }
+
+  it("pauses the stream at input-required with a labeled Input Need and does not continue on its own", async () => {
+    const events = await postJsonRpcStreaming({
+      jsonrpc: "2.0",
+      id: "req-stream-input-required",
+      method: "message/send",
+      params: checkoutMessageSendParams(),
+    });
+
+    type StatusUpdateEnvelope = {
+      result: {
+        statusUpdate?: {
+          status: { state: string };
+          message: { parts: Array<{ text: string }> };
+          final: boolean;
+        };
+      };
+    };
+    const last = events[events.length - 1] as StatusUpdateEnvelope;
+
+    expect(last.result.statusUpdate?.status.state).toBe("input-required");
+    expect(last.result.statusUpdate?.final).toBe(false);
+    expect(last.result.statusUpdate?.message.parts[0].text).toContain(
+      "Input required:",
+    );
+  });
+
+  it("resumes the same task to working before further content when the user sends any follow-up input", async () => {
+    const pausedEvents = await postJsonRpcStreaming({
+      jsonrpc: "2.0",
+      id: "req-stream-input-required",
+      method: "message/send",
+      params: checkoutMessageSendParams(),
+    });
+    const pausedTask = (
+      pausedEvents[0] as { result: { task: { id: string; contextId: string } } }
+    ).result.task;
+
+    const resumedEvents = await postJsonRpcStreaming({
+      jsonrpc: "2.0",
+      id: "req-stream-resume",
+      method: "message/send",
+      params: {
+        message: {
+          role: "user",
+          parts: [
+            { text: "Guest checkout must be supported.", kind: "text" },
+          ],
+          messageId: "resume-msg-1",
+          taskId: pausedTask.id,
+          contextId: pausedTask.contextId,
+          kind: "message",
+        },
+      },
+    });
+
+    type TaskEnvelope = {
+      result: { task: { id: string; status: { state: string } } };
+    };
+    type StatusUpdateEnvelope = {
+      result: {
+        statusUpdate?: { message: { parts: Array<{ text: string }> } };
+      };
+    };
+    const [first, second] = resumedEvents as [
+      TaskEnvelope,
+      StatusUpdateEnvelope,
+    ];
+
+    expect(first.result.task.id).toBe(pausedTask.id);
+    expect(first.result.task.status.state).toBe("working");
+    expect(second.result.statusUpdate?.message.parts[0].text).toContain(
+      "Updating the checkout flow",
+    );
+  });
+
+  it("keeps the same task identity and connects the prior message history across the pause and resumption", async () => {
+    await postJsonRpcStreaming({
+      jsonrpc: "2.0",
+      id: "req-stream-input-required",
+      method: "message/send",
+      params: checkoutMessageSendParams(),
+    });
+    const [pausedTaskId, pausedTask] = [...tasks.entries()][0];
+    const contextId = pausedTask.contextId;
+
+    await postJsonRpcStreaming({
+      jsonrpc: "2.0",
+      id: "req-stream-resume",
+      method: "message/send",
+      params: {
+        message: {
+          role: "user",
+          parts: [
+            { text: "Guest checkout must be supported.", kind: "text" },
+          ],
+          messageId: "resume-msg-1",
+          taskId: pausedTaskId,
+          contextId,
+          kind: "message",
+        },
+      },
+    });
+
+    expect(tasks.size).toBe(1);
+    expect(tasks.has(pausedTaskId)).toBe(true);
+
+    const context = contexts.get(contextId);
+    const messageTexts = context?.messages.map((m) => m.text) ?? [];
+    expect(
+      messageTexts.some((text) => text.includes("Input required:")),
+    ).toBe(true);
+    expect(messageTexts).toContain("Guest checkout must be supported.");
+    expect(
+      messageTexts.some((text) => text.includes("Updated the checkout flow")),
+    ).toBe(true);
+  });
+});

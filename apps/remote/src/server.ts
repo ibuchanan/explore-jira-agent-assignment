@@ -638,11 +638,12 @@ async function handleSendStreamingMessage(
 
 /**
  * A task can be resumed by any subsequent user input while it's paused at
- * `auth-required`, per the initial A2A Simulator happy path (see
- * docs/adr/0036). Other interruption states are out of scope for this pass.
+ * `auth-required` or `input-required`, per docs/adr/0015 and the initial
+ * A2A Simulator happy path (see docs/adr/0036). Other interruption states
+ * are out of scope for this pass.
  */
 function isResumableState(state: TaskState): boolean {
-  return state === "auth-required";
+  return state === "auth-required" || state === "input-required";
 }
 
 /**
