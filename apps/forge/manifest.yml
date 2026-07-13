@@ -1,5 +1,5 @@
 app:
-  id: ari:cloud:ecosystem::app/7bf74326-526a-4429-b4cc-aa043fb1949a
+  id: ari:cloud:ecosystem::app/8ebf6046-0fad-4579-83d1-38771127c726
   runtime:
     name: nodejs24.x
 environment:
@@ -29,7 +29,7 @@ modules:
         agent2Agent:
           jsonRpcTransport:
             endpoint: a2a-json-rpc-endpoint
-            streaming: true
+            streaming: false
   trigger:
     - key: installation-trigger
       endpoint: atlassian-installed-endpoint
