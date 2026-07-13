@@ -114,11 +114,22 @@
       "cache": false,
       "persistent": false
     },
+    "forge:register": {
+      "cache": false,
+      "persistent": false
+    },
     "forge:uninstall": {
       "cache": false,
       "persistent": false
     },
     "dev:remote": {
+      "dependsOn": [
+        "^build"
+      ],
+      "cache": false,
+      "persistent": true
+    },
+    "dev:remote:watch": {
       "dependsOn": [
         "^build"
       ],

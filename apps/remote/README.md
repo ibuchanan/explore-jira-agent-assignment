@@ -91,7 +91,7 @@ with another HTTPS tunnel or deployment platform. Make sure the Forge app's
 
 ## Development
 
-From the repository root, start only the backend watch process:
+From the repository root, start only the backend process:
 
 ```bash
 npm run dev:remote
@@ -105,11 +105,24 @@ npm run dev
 
 The workspace script currently runs:
 
-- `npm run dev:tunnel` — starts the `zrok` reserved share from `.env`
-- `npm run dev:remote` — starts `tsx watch src/server.ts`
+- `npm run dev:tunnel` — starts the `zrok` named share from `.env`, headless
+  (`--headless`), with combined output teed to `logs/dev-tunnel.log`
+- `npm run dev:remote` — runs `tsx src/server.ts` once, with combined output
+  teed to `logs/dev-remote.log`
+
+Both default to a plain, loggable, non-interactive run. When you're actively
+iterating and want live reload or the interactive `zrok` share view, use the
+`:watch` variants instead:
+
+- `npm run dev:tunnel:watch` — same share, with the interactive `zrok` TUI
+- `npm run dev:remote:watch` — `tsx watch src/server.ts`, restarting on file changes
+
+Before starting the tunnel for the first time, run `npm run dev:tunnel:create`
+from this workspace. That command creates the public zrok name from `HOSTNAME`
+in `.env`.
 
 If you use a different tunnel, start it separately and use `npm run dev:remote`
-for the service process.
+(or `dev:remote:watch`) for the service process.
 
 ## Build and run
 

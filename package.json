@@ -15,6 +15,7 @@
     "clean": "rm -rf ./node_modules && rm package-lock.json && turbo run clean",
     "dev": "turbo run dev",
     "dev:remote": "turbo run dev:remote --filter=remote-agent-backend",
+    "dev:remote:watch": "turbo run dev:remote:watch --filter=remote-agent-backend",
     "forge:deploy": "turbo run forge:deploy --filter=explore-jira-agent-assigment",
     "forge:install": "turbo run forge:install --filter=explore-jira-agent-assigment",
     "forge:uninstall": "turbo run forge:uninstall --filter=explore-jira-agent-assigment",
