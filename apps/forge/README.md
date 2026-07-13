@@ -226,12 +226,14 @@ Expected values:
 
 ```bash
 export SITENAME=
+export HOSTNAME=
 export REMOTE_SERVICE_URL=https://$HOSTNAME.share.zrok.io/
 ```
 
 | Variable | Purpose |
 | --- | --- |
 | `SITENAME` | Jira site name without `.atlassian.net`. |
+| `HOSTNAME` | The same `zrok` hostname configured in `apps/remote/.env`. |
 | `REMOTE_SERVICE_URL` | Public HTTPS base URL for the remote backend. |
 
 ## Common commands
@@ -272,10 +274,30 @@ The scripts load `.env` before running Forge CLI commands.
    npm run forge:install
    ```
 
+   Keep the remote backend and tunnel running for this step.
+   The install lifecycle event is routed to `/atlassian/installed`,
+   where the backend stores the Jira site installation record used by later
+   remote-agent requests.
+
 If you change scopes, remotes, token settings,
 or other permission-affecting manifest fields,
 redeploy and upgrade the installed app
 so Jira consents to the new version.
+
+If you delete local backend state,
+change the public tunnel URL,
+or need to replay the install lifecycle event for this sample,
+run:
+
+```bash
+npm run forge:uninstall
+npm run forge:install
+```
+
+This sample handles the installed lifecycle event.
+The uninstall command removes the Jira app installation;
+the following install sends a fresh installed event
+so the backend can recreate its per-install state.
 
 ## Testing
 

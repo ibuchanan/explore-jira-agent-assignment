@@ -21,12 +21,12 @@ import {
   writeA2aJsonRpcTaskSnapshot,
 } from "./a2aStream.js";
 import { type AuthenticatedRequest, authMiddleware } from "./auth.js";
-import { loadScenarios, matchScenario } from "./scenarios.js";
+import { isResumableTaskState } from "./scenarioSession.js";
 import {
   prefixAgentMessage,
   SimulationScenarioSessionRuntime,
 } from "./scenarioSessionRuntime.js";
-import { isResumableTaskState } from "./scenarioSession.js";
+import { loadScenarios, matchScenario } from "./scenarios.js";
 import {
   type AgentContext,
   contexts,
@@ -579,7 +579,12 @@ app.post("/atlassian/installed", authMiddleware, async (req, res) => {
     JSON.stringify(req.body, null, 2),
   );
 
-  const { context, installationId, installerAccountId } = req.body;
+  const { context, id: installationId, installerAccountId } = req.body;
+  if (typeof installationId !== "string" || installationId.length === 0) {
+    console.error("Installation webhook missing id:", req.body);
+    return res.status(400).json({ error: "Missing installation id" });
+  }
+
   const cloudIdResult = extractCloudId(context);
   if (cloudIdResult.isErr()) {
     console.error(

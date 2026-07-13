@@ -34,7 +34,7 @@ and the linked guide is the right place to learn it:
   [zrok](https://docs.zrok.io/docs/getting-started/).
   Sign up,
   then run `zrok enable <your-token>` once.
-  Strictly speacking,
+  Strictly speaking,
   `zrok` is not a requirement,
   but tunneling to a local dev environment is.
 
@@ -71,25 +71,7 @@ This step matters more than it might look like:
 it means the whole sample checks out on your machine 
 before you've configured a single account.
 
-## 4. Reserve a public tunnel address
-
-The remote backend needs a stable public HTTPS URL 
-that Jira's Forge platform can reach.
-Reserve one now, 
-replacing `your-chosen-name` with a name of your own
-(lowercase letters, numbers, and hyphens only):
-
-```bash
-zrok reserve public http://localhost:3000 --unique-name your-chosen-name
-```
-
-This reservation persists across restarts;
-you only do it once.
-Your tunnel's public address will be `https://your-chosen-name.share.zrok.io/`.
-Keep that name; 
-you'll use it twice more below.
-
-## 5. Configure the remote backend
+## 4. Configure the remote backend
 
 Copy the environment file:
 
@@ -104,7 +86,26 @@ export PORT=3000
 export HOSTNAME=your-chosen-name
 ```
 
-Use the same name you reserved in step 4.
+Choose a `HOSTNAME` with lowercase letters, 
+numbers,
+and hyphens only.
+
+## 5. Create a public tunnel name
+
+The remote backend needs a stable public HTTPS URL 
+that Jira's Forge platform can reach.
+Create one now from `apps/remote`:
+
+```bash
+npm run dev:tunnel:create
+```
+
+This command uses the `HOSTNAME` you set in step 4.
+The name persists across restarts;
+you only do it once.
+Your tunnel's public address will be `https://your-chosen-name.share.zrok.io/`.
+Keep that address; 
+you'll use it in the next step.
 
 ## 6. Configure the Forge app
 
@@ -117,12 +118,15 @@ cp apps/forge/.env.example apps/forge/.env
 Open `apps/forge/.env` and set:
 
 ```bash
+export HOSTNAME=your-chosen-name
 export SITENAME=your-site-name
-export REMOTE_SERVICE_URL=https://your-chosen-name.share.zrok.io/
+export REMOTE_SERVICE_URL=https://$HOSTNAME.share.zrok.io/
 ```
 
+`HOSTNAME` must match the value in `apps/remote/.env`.
 `SITENAME` is your Jira site name without `.atlassian.net`.
-`REMOTE_SERVICE_URL` is the tunnel address from step 4.
+`REMOTE_SERVICE_URL` expands to the tunnel address from step 5
+when the Forge script loads this file.
 
 ## 7. Start the remote backend
 
@@ -171,6 +175,25 @@ npm run forge:install
 
 The first command uploads the app to Forge's development environment.
 The second installs it on the Jira site you set in `SITENAME`.
+Keep the remote backend and tunnel running while you install.
+`forge install` sends the Forge installed lifecycle event
+to `/atlassian/installed`,
+and the backend stores the Jira site installation record it needs
+for later agent requests.
+
+If you deleted the local `database/` directory,
+changed the tunnel URL,
+or need a fresh install lifecycle event for this sample,
+uninstall and install again:
+
+```bash
+npm run forge:uninstall
+npm run forge:install
+```
+
+The uninstall command removes the current Jira app installation.
+The next install sends the lifecycle event again
+so the backend can recreate its per-install state.
 
 ## 10. Assign a work item to the agent
 

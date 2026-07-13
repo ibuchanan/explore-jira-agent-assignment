@@ -95,19 +95,23 @@ Forge app itself.
 ## Quickstart
 
 1. Install dependencies from the repository root: `npm install`
-2. Copy `apps/remote/.env.example` to `apps/remote/.env` and
-   `apps/forge/.env.example` to `apps/forge/.env`, then fill in `PORT`,
-   `HOSTNAME`, `SITENAME`, and `REMOTE_SERVICE_URL`.
-3. Start the remote backend (`npm run dev:remote`) and, in a second
+2. Copy `apps/remote/.env.example` to `apps/remote/.env`, then fill in
+   `PORT` and `HOSTNAME`.
+3. From `apps/remote`, run `npm run dev:tunnel:create` once to create the
+   public zrok tunnel name.
+4. Copy `apps/forge/.env.example` to `apps/forge/.env`, then fill in
+   `HOSTNAME`, `SITENAME`, and `REMOTE_SERVICE_URL`. Use the same `HOSTNAME`
+   value from `apps/remote/.env`.
+5. Start the remote backend (`npm run dev:remote`) and, in a second
    terminal, the tunnel (`npm run dev:tunnel` from `apps/remote`).
-4. Deploy and install the Forge app:
-   `npm run forge:deploy && npm run forge:install`.
+6. Deploy and install the Forge app while the backend and tunnel are running:
+   `npm run forge:deploy && npm run forge:install`. The install step sends
+   the lifecycle event that lets the backend store its per-install state.
 
 Forge commands require valid local environment files and Forge authentication.
 
-This summary skips one prerequisite: reserving a public zrok tunnel address
-before step 2 works. For the complete, verified walkthrough — including
-that step, expected output at each stage, and a first real Jira task — see
+For the complete, verified walkthrough, including expected output at each
+stage and a first real Jira task, see
 [Tutorial: Run the Sample End-to-End](docs/tutorials/run-the-sample-end-to-end.md).
 
 ## Validate the repo
@@ -176,8 +180,8 @@ change more often than this list should try to track.
 | `npm run lint` | Lint workspaces. |
 | `npm run typecheck` | Run TypeScript checks across workspaces. |
 | `npm run forge:deploy` | Deploy the Forge app workspace. |
-| `npm run forge:install` | Install the Forge app workspace. |
-| `npm run forge:uninstall` | Uninstall the Forge app workspace. |
+| `npm run forge:install` | Install the Forge app workspace and send the installed lifecycle event to the backend. |
+| `npm run forge:uninstall` | Uninstall the Forge app workspace so a later install can recreate backend install state. |
 
 See `package.json` files for the full script list.
 

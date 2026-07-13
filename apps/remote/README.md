@@ -83,7 +83,7 @@ export HOSTNAME=
 | Variable | Purpose |
 | --- | --- |
 | `PORT` | Local Express server port. Defaults to `3000` if unset. |
-| `HOSTNAME` | Reserved `zrok` hostname used by the sample tunnel script. |
+| `HOSTNAME` | Named `zrok` hostname used by the sample tunnel script. |
 
 If you are not using `zrok`, you can still run the server directly and expose it
 with another HTTPS tunnel or deployment platform. Make sure the Forge app's
@@ -160,6 +160,15 @@ local installation record containing:
 - `installerAccountId`
 - `baseUrl`
 - `installedAt`
+
+This record is created when `npm run forge:install` installs the Forge app
+while this backend and its public tunnel are reachable.
+If the local `database/` directory is deleted,
+or if the app is pointed at a different tunnel URL,
+run `npm run forge:uninstall` and then `npm run forge:install`
+to make Forge send the installed lifecycle event again.
+This sample does not handle an uninstall lifecycle webhook;
+uninstall is used here to allow a later fresh install.
 
 ### `POST /a2a/json-rpc`
 

@@ -122,11 +122,25 @@ describe("Installation lifecycle remote endpoint contract", () => {
     expect(saveData).toHaveBeenCalledTimes(1);
     expect(installations.get(cloudId)).toMatchObject({
       cloudId,
-      installationId: installationWebhook.installationId,
+      installationId: installationWebhook.id,
       installerAccountId: installationWebhook.installerAccountId,
       baseUrl,
     });
     expect(installations.get(cloudId)?.installedAt).toEqual(expect.any(String));
+  });
+
+  it("rejects installation requests without a lifecycle event id", async () => {
+    const { id: _id, ...eventWithoutId } = installationWebhook;
+
+    const response = await postInstallation(eventWithoutId);
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Missing installation id",
+    });
+    expect(fetchJiraServerInfo).not.toHaveBeenCalled();
+    expect(installations.size).toBe(0);
+    expect(saveData).not.toHaveBeenCalled();
   });
 
   it("rejects installation requests without a Forge Invocation Token", async () => {
