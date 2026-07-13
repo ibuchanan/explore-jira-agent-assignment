@@ -15,24 +15,28 @@ export interface SendMessageParams {
 }
 
 /**
- * Parameters for the tasks/get JSON-RPC method.
+ * Parameters for the tasks/get JSON-RPC method. Jira sends the standard A2A
+ * `TaskQueryParams` shape (`id`, optional `historyLength`), not `taskId`.
  */
 export interface GetTaskParams {
-  taskId: string;
+  id: string;
+  historyLength?: number;
 }
 
 /**
- * Parameters for the tasks/cancel JSON-RPC method.
+ * Parameters for the tasks/cancel JSON-RPC method. Jira sends the standard
+ * A2A `TaskIdParams` shape (`id`), not `taskId`.
  */
 export interface CancelTaskParams {
-  taskId: string;
+  id: string;
 }
 
 /**
- * Parameters for the tasks/resubscribe JSON-RPC method.
+ * Parameters for the tasks/resubscribe JSON-RPC method. Jira sends the
+ * standard A2A `TaskIdParams` shape (`id`), not `taskId`.
  */
 export interface ResubscribeTaskParams {
-  taskId: string;
+  id: string;
 }
 
 export type AgentConnectorMethod =

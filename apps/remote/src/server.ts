@@ -302,7 +302,7 @@ async function handleMessageSend({
 async function handleTasksGet({
   params,
 }: JsonRpcHandlerParams): Promise<unknown> {
-  const taskId = params.taskId as string;
+  const taskId = (params.id || params.taskId) as string;
   const task = tasks.get(taskId);
 
   if (!task) {
@@ -326,7 +326,7 @@ async function handleTasksGet({
 async function handleTasksCancel({
   params,
 }: JsonRpcHandlerParams): Promise<unknown> {
-  const taskId = params.taskId as string;
+  const taskId = (params.id || params.taskId) as string;
   const task = simulationScenarioSessions.cancel(taskId);
   const formattedTask = formatAgentConnectorTaskResponse(task, task.contextId);
   console.log("JSON-RPC tasks/cancel response:", {

@@ -2,7 +2,7 @@
  * Rovo remote agent connector protocol tests
  *
  * These tests complement the remote-agent docs by specifying A2A task states,
- * JSON-RPC request/response shapes, task formatting, and the tasks/get taskId
+ * JSON-RPC request/response shapes, task formatting, and the tasks/get `id`
  * contract that Jira uses when polling a remote agent.
  *
  * @see {@link https://developer.atlassian.com/platform/forge/remote-agents-in-jira/|Integrate remote agents with Jira}
@@ -30,7 +30,7 @@ import {
 import type { JsonRpcResponse } from "../../src/util/jsonrpc";
 
 // Type-only import retained for Protocol Compliance tests below. It keeps the
-// documented taskId-only method params close to the behavioral assertions.
+// documented `id`-based method params close to the behavioral assertions.
 
 // Minimal valid Task fixture reused across tests
 const makeTask = (
@@ -386,36 +386,19 @@ describe("A2A Protocol — behavioural tests", () => {
   });
 
   describe("Protocol Compliance", () => {
-    it("tasks/get should use 'taskId' parameter, never 'id' or 'historyLength'", () => {
-      // This test encodes the fix for the production bug that caused:
-      // "I couldn't finish working because of a technical problem on my end"
-      // The old implementation incorrectly sent { id, historyLength } instead of { taskId }.
-      const correctRequest: AgentConnectorRequest = {
-        jsonrpc: "2.0",
-        id: 1,
-        method: "tasks/get",
-        params: { taskId: "task-xyz" },
-      };
-
-      const incorrectRequest = {
-        jsonrpc: "2.0",
-        id: 1,
-        method: "tasks/get",
-        params: { id: "task-xyz", historyLength: 0 }, // OLD WRONG WAY
-      };
-
-      expect(correctRequest.params).toHaveProperty("taskId");
-      expect(incorrectRequest.params).not.toHaveProperty("taskId");
-    });
-
-    it("tasks/get params should not include historyLength", () => {
+    it("tasks/get uses the standard A2A 'id' parameter, with optional historyLength", () => {
+      // Jira sends the standard A2A TaskQueryParams shape: { id, historyLength }.
+      // A prior version of this contract assumed { taskId } instead, which caused
+      // real tasks/get polls from Jira to fail with "Task not found" in production.
       const request: AgentConnectorRequest = {
         jsonrpc: "2.0",
-        id: "req-2",
+        id: 1,
         method: "tasks/get",
-        params: { taskId: "task-123" },
+        params: { id: "task-xyz", historyLength: 0 },
       };
-      expect(request.params).not.toHaveProperty("historyLength");
+
+      expect(request.params).toHaveProperty("id");
+      expect(request.params).toHaveProperty("historyLength");
     });
 
     it("a successful JsonRpcResponse carries result but not error", () => {

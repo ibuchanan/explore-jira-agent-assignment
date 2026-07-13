@@ -174,8 +174,9 @@ Implemented methods:
 | `tasks/cancel` | Stops an actively streaming scenario (or schedules a delayed transition for a polled task), then reports terminal `canceled`. |
 | `tasks/resubscribe` | Streams the task's current snapshot, then — if the task is still active — continues the matched scenario from the next step that hasn't been streamed yet, rather than replaying it from the start. |
 
-The sample uses the `taskId` param for `tasks/get`, `tasks/cancel`, and
-`tasks/resubscribe`.
+The sample uses the standard A2A `id` param for `tasks/get`, `tasks/cancel`,
+and `tasks/resubscribe` — this is the shape Jira actually sends on the wire.
+The handlers also accept a `taskId` param for backward compatibility.
 
 See [`scenarios/README.md`](scenarios/README.md) for how Simulation Scenarios
 are matched, validated, and authored.

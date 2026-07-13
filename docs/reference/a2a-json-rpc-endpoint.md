@@ -31,11 +31,13 @@ streamed event kinds, and error codes. Implemented in
 | --- | --- | --- | --- |
 | `message/send` | Polling (default `Accept`) | Message payload, optional `contextId`, optional `taskId` for resumption | A `Task` object |
 | `message/send` | Streaming (`Accept: text/event-stream`) | Same as above | Stream of `task-state-update`, `content-update`, and `artifact-update` events |
-| `tasks/get` | Polling | `taskId` | A `Task` object |
-| `tasks/cancel` | Polling | `taskId` | A `Task` object in a terminal state |
-| `tasks/resubscribe` | Streaming | `taskId` | Current task snapshot, then remaining events for an active task |
+| `tasks/get` | Polling | `id`, optional `historyLength` | A `Task` object |
+| `tasks/cancel` | Polling | `id` | A `Task` object in a terminal state |
+| `tasks/resubscribe` | Streaming | `id` | Current task snapshot, then remaining events for an active task |
 
-`tasks/get`, `tasks/cancel`, and `tasks/resubscribe` use the `taskId` param.
+`tasks/get`, `tasks/cancel`, and `tasks/resubscribe` use the standard A2A `id`
+param (Jira's actual wire shape), not `taskId`. The handlers also accept a
+`taskId` param for backward compatibility.
 
 ## Task object
 

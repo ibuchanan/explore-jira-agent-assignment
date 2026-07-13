@@ -302,7 +302,7 @@ describe("A2A JSON-RPC protocol contract", () => {
     });
   });
 
-  it("rejects legacy tasks/get params that use id instead of taskId", async () => {
+  it("accepts JSON-RPC 2.0 tasks/get with the real Jira wire shape (id and historyLength)", async () => {
     const createdResponse = await postJsonRpc({
       jsonrpc: "2.0",
       id: "req-create",
@@ -313,7 +313,7 @@ describe("A2A JSON-RPC protocol contract", () => {
 
     const response = await postJsonRpc({
       jsonrpc: "2.0",
-      id: "req-legacy-get",
+      id: "req-real-get",
       method: "tasks/get",
       params: { id: createdBody.result.id, historyLength: 0 },
     });
@@ -321,8 +321,12 @@ describe("A2A JSON-RPC protocol contract", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       jsonrpc: "2.0",
-      id: "req-legacy-get",
-      error: { code: -32001, message: "Task not found" },
+      id: "req-real-get",
+      result: {
+        id: createdBody.result.id,
+        kind: "task",
+        status: { state: "working" },
+      },
     });
   });
 
@@ -356,6 +360,30 @@ describe("A2A JSON-RPC protocol contract", () => {
           },
         },
       },
+    });
+  });
+
+  it("accepts JSON-RPC 2.0 tasks/cancel with the real Jira wire shape (id parameter)", async () => {
+    const createdResponse = await postJsonRpc({
+      jsonrpc: "2.0",
+      id: "req-create",
+      method: "message/send",
+      params: messageSendParams,
+    });
+    const createdBody = await createdResponse.json();
+
+    const response = await postJsonRpc({
+      jsonrpc: "2.0",
+      id: "req-real-cancel",
+      method: "tasks/cancel",
+      params: { id: createdBody.result.id },
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      jsonrpc: "2.0",
+      id: "req-real-cancel",
+      result: { id: createdBody.result.id, kind: "task" },
     });
   });
 
