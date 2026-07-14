@@ -250,6 +250,7 @@ npm run typecheck
 Forge commands:
 
 ```bash
+npm run forge:register
 npm run forge:deploy
 npm run forge:install
 npm run forge:uninstall
@@ -262,13 +263,24 @@ The scripts load `.env` before running Forge CLI commands.
 1. Start or deploy the remote backend and confirm it is reachable over HTTPS.
 2. Set `REMOTE_SERVICE_URL` in `apps/forge/.env` to that backend's base URL.
 3. Set `SITENAME` in `apps/forge/.env` to your Jira development site name.
-4. Deploy the Forge app:
+4. If this clone has not been registered with your Forge account, register it
+   once:
+
+   ```bash
+   npm run forge:register
+   ```
+
+   This creates a Forge app in your own developer space and updates
+   `manifest.yml` with that app ID. Do not rerun it unless you intentionally
+   want a fresh app registration.
+
+5. Deploy the Forge app:
 
    ```bash
    npm run forge:deploy
    ```
 
-5. Install the app into Jira:
+6. Install the app into Jira:
 
    ```bash
    npm run forge:install

@@ -102,33 +102,26 @@ Forge app itself.
 4. Copy `apps/forge/.env.example` to `apps/forge/.env`, then fill in
    `HOSTNAME`, `SITENAME`, and `REMOTE_SERVICE_URL`. Use the same `HOSTNAME`
    value from `apps/remote/.env`.
-5. Start the remote backend (`npm run dev:remote`) and, in a second
+5. If this clone has not been registered with your Forge account, run
+   `npm run forge:register` once from the repository root. This creates a
+   Forge app in your own developer space and updates `apps/forge/manifest.yml`
+   with that app ID. That is expected for cloned Forge apps.
+6. Start the remote backend (`npm run dev:remote`) and, in a second
    terminal, the tunnel (`npm run dev:tunnel` from `apps/remote`).
-6. Deploy and install the Forge app while the backend and tunnel are running:
+7. Deploy and install the Forge app while the backend and tunnel are running:
    `npm run forge:deploy && npm run forge:install`. The install step sends
    the lifecycle event that lets the backend store its per-install state.
 
-Forge commands require valid local environment files and Forge authentication.
+Forge commands require valid local environment files, Forge authentication,
+and a Forge app ID registered for the account running the command.
+Do not rerun `npm run forge:register` unless you intentionally want a fresh
+Forge app registration.
 
 For the complete, verified walkthrough, including expected output at each
 stage and a first real Jira task, see
 [Tutorial: Run the Sample End-to-End](docs/tutorials/run-the-sample-end-to-end.md).
 
-## Validate the repo
-
-Useful commands from the repository root:
-
-```bash
-npm run build
-npm run test
-npm run lint
-npm run typecheck
-```
-
-If you are only checking the remote backend or shared package,
-run the relevant workspace script directly.
-
-## Simulate the sample flow
+## Explore simulation scenarios
 
 The remote backend's streamed behavior is driven by editable YAML
 Simulation Scenarios under `apps/remote/scenarios/` rather than hardcoded
@@ -139,51 +132,10 @@ requires a real Forge Invocation Token that a bare `curl` can't supply).
 Try it hands-on in
 [Tutorial: Edit a Simulation Scenario](docs/tutorials/edit-a-simulation-scenario.md).
 
-## Repository layout
+## Development
 
-```text
-├── apps/
-│   ├── forge/          # Forge app for the Jira agent connector
-│   └── remote/         # Express backend for install and JSON-RPC requests
-├── packages/
-│   └── forge-ahead/    # Shared Forge, FIT, manifest, and agent helpers
-├── docs/
-│   ├── tutorials/       # learning-oriented lessons
-│   ├── how-to-guides/   # goal-oriented troubleshooting and tasks
-│   ├── reference/       # wire contracts and other lookup facts
-│   ├── explanation/     # design reasoning
-│   └── adr/             # individual architecture decision records
-├── specs/              # provider-neutral feature specs
-└── .atlassian/         # Repository ownership metadata
-```
-
-## Key files
-
-- `apps/forge/manifest.yml` — Forge modules, remotes, scopes, and triggers
-- `apps/remote/src/server.ts` — remote installation and task endpoints
-- `apps/remote/src/auth.ts` — FIT validation middleware for Forge remotes
-- `apps/remote/scenarios/` — the editable Simulation Scenario YAML files themselves
-- `packages/forge-ahead/src/` — reusable helpers and types used by the sample
-
-See [`apps/forge/README.md`](apps/forge/README.md#source-files) and
-[`apps/remote/README.md`](apps/remote/README.md) for the current, more
-detailed file breakdown for each workspace — internal file names there
-change more often than this list should try to track.
-
-## Common commands
-
-| Command | Purpose |
-| --- | --- |
-| `npm run build` | Build all packages and apps. |
-| `npm run dev:remote` | Start the remote backend development flow. |
-| `npm run test` | Run tests across workspaces. |
-| `npm run lint` | Lint workspaces. |
-| `npm run typecheck` | Run TypeScript checks across workspaces. |
-| `npm run forge:deploy` | Deploy the Forge app workspace. |
-| `npm run forge:install` | Install the Forge app workspace and send the installed lifecycle event to the backend. |
-| `npm run forge:uninstall` | Uninstall the Forge app workspace so a later install can recreate backend install state. |
-
-See `package.json` files for the full script list.
+For repository layout, key files, command reference, validation checks,
+and contribution workflow details, see [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ## Deeper documentation
 
