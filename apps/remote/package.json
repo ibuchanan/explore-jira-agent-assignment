@@ -27,6 +27,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@forge-ahead/errors": "github:ibuchanan/forge-ahead-errors",
     "express": "^5.2.1",
     "forge-ahead": "*",
     "yaml": "^2.8"

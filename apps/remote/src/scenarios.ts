@@ -13,7 +13,7 @@ import {
   type ProblemDetails,
   type Result,
   StandardError,
-} from "forge-ahead";
+} from "@forge-ahead/errors";
 import YAML from "yaml";
 
 function getErrorMessage(error: unknown): string {
