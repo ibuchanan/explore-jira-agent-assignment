@@ -26,7 +26,7 @@ import {
   prefixAgentMessage,
   SimulationScenarioSessionRuntime,
 } from "./scenarioSessionRuntime.js";
-import { loadScenarios, matchScenario } from "./scenarios.js";
+import { loadScenarios, matchScenario, type Scenario } from "./scenarios.js";
 import {
   type AgentContext,
   contexts,
@@ -341,9 +341,15 @@ async function handleTasksCancel({
 // Streaming JSON-RPC Handlers
 // ============================================================================
 
-function logStreamedScenarioEvent(event: MappedEvent, task: Task): void {
+function logStreamedScenarioEvent(
+  event: MappedEvent,
+  task: Task,
+  scenario: Scenario,
+): void {
   console.log("Scenario event streamed:", {
     taskId: task.id,
+    scenarioId: scenario.id,
+    step: `${task.nextStepIndex ?? 0}/${scenario.steps.length}`,
     kind: event.kind,
     state: task.status.state,
     final: event.kind === "task-state-update" ? event.final : false,
@@ -443,7 +449,7 @@ async function handleSendStreamingMessage(
     createA2aJsonRpcSessionStream({
       response: res,
       requestId,
-      onEvent: logStreamedScenarioEvent,
+      onEvent: (event, task) => logStreamedScenarioEvent(event, task, scenario),
     }),
     continuation,
   );
@@ -496,7 +502,7 @@ async function handleResumeStreamingMessage(
     createA2aJsonRpcSessionStream({
       response: res,
       requestId,
-      onEvent: logStreamedScenarioEvent,
+      onEvent: (event, task) => logStreamedScenarioEvent(event, task, scenario),
     }),
     continuation,
   );
@@ -542,7 +548,7 @@ async function handleTasksResubscribe(
       createA2aJsonRpcSessionStream({
         response: res,
         requestId,
-        onEvent: logStreamedScenarioEvent,
+        onEvent: (event, task) => logStreamedScenarioEvent(event, task, scenario),
       }),
       continuation,
     );
