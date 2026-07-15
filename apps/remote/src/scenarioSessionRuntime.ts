@@ -6,6 +6,12 @@
  */
 
 import {
+  ok,
+  type ProblemDetails,
+  type Result,
+  StandardError,
+} from "@forge-ahead/errors";
+import {
   isTerminalState,
   isValidTransition,
   type MappedEvent,
@@ -133,14 +139,16 @@ export class SimulationScenarioSessionRuntime {
     this.applyEffectsToActiveSession(activeSession, continuation.effects);
   }
 
-  cancel(taskId: string): Task {
+  cancel(taskId: string): Result<Task, ProblemDetails> {
     const task = this.options.store.getTask(taskId);
     if (!task) {
-      throw new Error("Task not found");
+      return StandardError.getOrDefault(404).error("Task not found");
     }
 
     if (!isValidTransition(task.status.state, "canceled")) {
-      throw new Error("Task cannot be canceled from current state");
+      return StandardError.getOrDefault(409).error(
+        "Task cannot be canceled from current state",
+      );
     }
 
     const activeSession = this.activeSessions.get(taskId);
@@ -151,7 +159,7 @@ export class SimulationScenarioSessionRuntime {
         activeSession,
         cancelActiveSimulationScenarioSession(),
       );
-      return task;
+      return ok(task);
     }
 
     this.applyEffectsToTask(
@@ -166,7 +174,7 @@ export class SimulationScenarioSessionRuntime {
       taskId,
       fromState: task.status.state,
     });
-    return task;
+    return ok(task);
   }
 
   private prepareAfterSnapshot(

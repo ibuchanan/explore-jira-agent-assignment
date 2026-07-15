@@ -30,7 +30,11 @@ function matchCodingAgentScenario(): Scenario {
   if (result.isErr()) {
     throw new Error(result.error.detail);
   }
-  return matchScenario(result.value, CODING_TASK_TEXT).scenario;
+  const matchResult = matchScenario(result.value, CODING_TASK_TEXT);
+  if (matchResult.isErr()) {
+    throw new Error(matchResult.error.detail);
+  }
+  return matchResult.value.scenario;
 }
 
 function contentUpdateMessages(scenario: Scenario): string[] {

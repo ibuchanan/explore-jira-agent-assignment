@@ -255,7 +255,11 @@ describe("matchScenario", () => {
       "Please FIX THE BUG in checkout",
     );
 
-    expect(result).toEqual({ scenario: bugFixScenario, matchedBy: "rule" });
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toEqual({
+      scenario: bugFixScenario,
+      matchedBy: "rule",
+    });
   });
 
   it("picks the earlier scenario in order when more than one rule matches", () => {
@@ -270,8 +274,8 @@ describe("matchScenario", () => {
       taskText,
     );
 
-    expect(firstOrder.scenario.id).toBe("bug-fix");
-    expect(reversedOrder.scenario.id).toBe("new-feature");
+    expect(firstOrder._unsafeUnwrap().scenario.id).toBe("bug-fix");
+    expect(reversedOrder._unsafeUnwrap().scenario.id).toBe("new-feature");
   });
 
   it("falls back to the Default Scenario when no rule matches, and logs the fallback", () => {
@@ -287,7 +291,7 @@ describe("matchScenario", () => {
       "do something unrelated to any rule",
     );
 
-    expect(result).toEqual({
+    expect(result._unsafeUnwrap()).toEqual({
       scenario: defaultScenario,
       matchedBy: "default",
     });

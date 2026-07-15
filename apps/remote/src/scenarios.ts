@@ -183,7 +183,7 @@ export function loadScenarios(dir: string): Result<Scenario[], ProblemDetails> {
 export function matchScenario(
   scenarios: Scenario[],
   taskText: string,
-): ScenarioMatchResult {
+): Result<ScenarioMatchResult, ProblemDetails> {
   const normalizedTaskText = taskText.toLowerCase();
 
   for (const scenario of scenarios) {
@@ -192,7 +192,7 @@ export function matchScenario(
       normalizedTaskText.includes(phrase.toLowerCase()),
     );
     if (isMatch) {
-      return { scenario, matchedBy: "rule" };
+      return ok({ scenario, matchedBy: "rule" });
     }
   }
 
@@ -200,7 +200,7 @@ export function matchScenario(
     (scenario) => scenario.default === true,
   );
   if (!defaultScenario) {
-    throw new Error(
+    return StandardError.getOrDefault(500).error(
       "No scenario rule matched and no Default Scenario (default: true) was found.",
     );
   }
@@ -210,5 +210,5 @@ export function matchScenario(
     taskText,
   });
 
-  return { scenario: defaultScenario, matchedBy: "default" };
+  return ok({ scenario: defaultScenario, matchedBy: "default" });
 }

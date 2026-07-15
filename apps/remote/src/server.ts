@@ -6,6 +6,13 @@
  */
 
 import path from "node:path";
+import {
+  fromPromise,
+  ok,
+  type ProblemDetails,
+  type Result,
+  StandardError,
+} from "@forge-ahead/errors";
 import express from "express";
 import {
   extractCloudId,
@@ -107,7 +114,8 @@ interface MessageContext {
  * the streaming handler (handleSendStreamingMessage) — extracting it here
  * eliminates the duplication between those two functions.
  *
- * @throws {Error} if the context cannot be found after creation (should never happen)
+ * Returns a Result error if the context cannot be found after creation
+ * (should never happen).
  */
 /**
  * Scan a message's parts for the first data part and extract work item / user
@@ -167,7 +175,7 @@ function recordUserMessages(parts: unknown[], context: AgentContext): void {
 function resolveMessageContext(
   rawMessage: { contextId?: string; parts: unknown[] },
   cloudId: string | undefined,
-): MessageContext {
+): Result<MessageContext, ProblemDetails> {
   const contextId = rawMessage.contextId || generateId("ctx");
   const { workItemId, userAccountId } = extractDataFields(rawMessage.parts);
 
@@ -185,12 +193,12 @@ function resolveMessageContext(
 
   const context = contexts.get(contextId);
   if (!context) {
-    throw new Error("Context not found");
+    return StandardError.getOrDefault(404).error("Context not found");
   }
 
   recordUserMessages(rawMessage.parts, context);
 
-  return { contextId, workItemId, userAccountId, context };
+  return ok({ contextId, workItemId, userAccountId, context });
 }
 
 // ============================================================================
@@ -212,7 +220,9 @@ interface JsonRpcHandlerParams {
   cloudId: string | undefined;
 }
 
-type JsonRpcHandler = (args: JsonRpcHandlerParams) => Promise<unknown>;
+type JsonRpcHandler = (
+  args: JsonRpcHandlerParams,
+) => Promise<Result<unknown, ProblemDetails>>;
 
 // ============================================================================
 // JSON-RPC Method Handlers
@@ -224,14 +234,18 @@ type JsonRpcHandler = (args: JsonRpcHandlerParams) => Promise<unknown>;
 async function handleMessageSend({
   params,
   cloudId,
-}: JsonRpcHandlerParams): Promise<unknown> {
+}: JsonRpcHandlerParams): Promise<Result<unknown, ProblemDetails>> {
   const { message } = params as {
     message: { contextId?: string; parts: unknown[] };
   };
   const taskId = generateId("task");
 
+  const contextResult = resolveMessageContext(message, cloudId);
+  if (contextResult.isErr()) {
+    return contextResult;
+  }
   const { contextId, workItemId, userAccountId, context } =
-    resolveMessageContext(message, cloudId);
+    contextResult.value;
 
   // Create initial task in submitted state
   const baseInitialMessage = workItemId
@@ -286,14 +300,16 @@ async function handleMessageSend({
   // Return the updated task object in response
   const updatedTask = tasks.get(taskId);
   if (!updatedTask) {
-    throw new Error("Task not found after creation");
+    return StandardError.getOrDefault(404).error(
+      "Task not found after creation",
+    );
   }
 
   const formattedTask = formatAgentConnectorTaskResponse(
     updatedTask,
     contextId,
   );
-  return formattedTask;
+  return ok(formattedTask);
 }
 
 /**
@@ -301,12 +317,12 @@ async function handleMessageSend({
  */
 async function handleTasksGet({
   params,
-}: JsonRpcHandlerParams): Promise<unknown> {
+}: JsonRpcHandlerParams): Promise<Result<unknown, ProblemDetails>> {
   const taskId = (params.id || params.taskId) as string;
   const task = tasks.get(taskId);
 
   if (!task) {
-    throw new Error("Task not found");
+    return StandardError.getOrDefault(404).error("Task not found");
   }
 
   const formattedTask = formatAgentConnectorTaskResponse(task, task.contextId);
@@ -317,7 +333,7 @@ async function handleTasksGet({
       message: task.status.message.parts[0]?.text,
     },
   });
-  return formattedTask;
+  return ok(formattedTask);
 }
 
 /**
@@ -325,16 +341,20 @@ async function handleTasksGet({
  */
 async function handleTasksCancel({
   params,
-}: JsonRpcHandlerParams): Promise<unknown> {
+}: JsonRpcHandlerParams): Promise<Result<unknown, ProblemDetails>> {
   const taskId = (params.id || params.taskId) as string;
-  const task = simulationScenarioSessions.cancel(taskId);
+  const taskResult = simulationScenarioSessions.cancel(taskId);
+  if (taskResult.isErr()) {
+    return taskResult;
+  }
+  const task = taskResult.value;
   const formattedTask = formatAgentConnectorTaskResponse(task, task.contextId);
   console.log("JSON-RPC tasks/cancel response:", {
     taskId: task.id,
     state: task.status.state,
     message: task.status.message.parts[0]?.text,
   });
-  return formattedTask;
+  return ok(formattedTask);
 }
 
 // ============================================================================
@@ -396,13 +416,20 @@ async function handleSendStreamingMessage(
 
   const taskId = generateId("task");
 
+  const contextResult = resolveMessageContext(message, cloudId);
+  if (contextResult.isErr()) {
+    writeStreamProblem(res, requestId, contextResult.error);
+    return;
+  }
   const { contextId, workItemId, userAccountId, context } =
-    resolveMessageContext(message, cloudId);
+    contextResult.value;
 
-  const { scenario, matchedBy } = matchScenario(
-    scenarios,
-    extractTaskText(message.parts),
-  );
+  const matchResult = matchScenario(scenarios, extractTaskText(message.parts));
+  if (matchResult.isErr()) {
+    writeStreamProblem(res, requestId, matchResult.error);
+    return;
+  }
+  const { scenario, matchedBy } = matchResult.value;
   console.log("Streaming task matched Simulation Scenario:", {
     taskId,
     scenarioId: scenario.id,
@@ -470,13 +497,25 @@ async function handleResumeStreamingMessage(
   message: { contextId?: string; parts: unknown[] },
   cloudId: string | undefined,
 ): Promise<void> {
-  const { context } = resolveMessageContext(message, cloudId);
+  const contextResult = resolveMessageContext(message, cloudId);
+  if (contextResult.isErr()) {
+    writeStreamProblem(res, requestId, contextResult.error);
+    return;
+  }
+  const { context } = contextResult.value;
 
   const scenario = scenarios.find(
     (candidate) => candidate.id === task.scenarioId,
   );
   if (!scenario) {
-    throw new Error("Scenario not found for resumed task");
+    writeStreamProblem(
+      res,
+      requestId,
+      StandardError.getOrDefault(404).error(
+        "Scenario not found for resumed task",
+      ).error,
+    );
+    return;
   }
 
   const resumedAtStepIndex = task.nextStepIndex ?? 0;
@@ -521,9 +560,11 @@ async function handleTasksResubscribe(
   const task = tasks.get(taskId);
 
   if (!task) {
-    startA2aJsonRpcStream(res);
-    writeA2aJsonRpcStreamError(res, requestId, -32001, "Task not found");
-    res.end();
+    writeStreamProblem(
+      res,
+      requestId,
+      StandardError.getOrDefault(404).error("Task not found").error,
+    );
     return;
   }
 
@@ -563,17 +604,47 @@ const methodHandlers: Record<JsonRpcMethod, JsonRpcHandler> = {
   [JSON_RPC_METHODS.TASKS_GET]: handleTasksGet,
   [JSON_RPC_METHODS.TASKS_CANCEL]: handleTasksCancel,
   // tasks/resubscribe is handled separately in the route (needs res access)
-  [JSON_RPC_METHODS.TASKS_RESUBSCRIBE]: async () => {
-    throw new Error("tasks/resubscribe must be handled via streaming route");
-  },
+  [JSON_RPC_METHODS.TASKS_RESUBSCRIBE]: async () =>
+    StandardError.getOrDefault(500).error(
+      "tasks/resubscribe must be handled via streaming route",
+    ),
 };
 
-// JSON-RPC error code mapping
-const JSON_RPC_ERROR_CODES = new Map([
-  ["Task not found", -32001],
-  ["Context not found", -32003],
-  ["Task cannot be canceled from current state", -32002],
+// Maps RFC 9457 ProblemDetails.status to the JSON-RPC error code the A2A
+// transport expects; anything not listed here is an unanticipated failure.
+const JSON_RPC_ERROR_CODES_BY_STATUS = new Map<number, number>([
+  [404, -32001], // Not Found
+  [409, -32002], // Conflict (invalid state transition)
 ]);
+const DEFAULT_JSON_RPC_ERROR_CODE = -32603; // Internal error
+
+function toJsonRpcError(problem: ProblemDetails): {
+  code: number;
+  message: string;
+} {
+  return {
+    code:
+      JSON_RPC_ERROR_CODES_BY_STATUS.get(problem.status) ??
+      DEFAULT_JSON_RPC_ERROR_CODE,
+    message: problem.detail,
+  };
+}
+
+/**
+ * Write a ProblemDetails as a JSON-RPC error over SSE and end the stream —
+ * the streaming-handler counterpart to returning a Result error from a
+ * polling JsonRpcHandler.
+ */
+function writeStreamProblem(
+  res: import("express").Response,
+  requestId: string,
+  problem: ProblemDetails,
+): void {
+  const { code, message } = toJsonRpcError(problem);
+  startA2aJsonRpcStream(res);
+  writeA2aJsonRpcStreamError(res, requestId, code, message);
+  res.end();
+}
 
 // ============================================================================
 // Route: Installation Webhook
@@ -602,33 +673,41 @@ app.post("/atlassian/installed", authMiddleware, async (req, res) => {
   }
   const cloudId = cloudIdResult.value;
 
-  try {
-    // Fetch base URL from Jira
-    const serverInfoResponse = await fetch(
+  // Fetch base URL from Jira
+  const serverInfoResult = await fromPromise(
+    fetch(
       `https://api.atlassian.com/ex/jira/${cloudId}/rest/api/3/serverInfo`,
-    );
-    const serverData = (await serverInfoResponse.json()) as { baseUrl: string };
-    console.log("Jira server info fetched:", JSON.stringify(serverData));
-
-    // Store installation
-    const installation: JiraInstallation = {
-      cloudId,
-      installationId,
-      baseUrl: serverData.baseUrl,
-      installerAccountId,
-      installedAt: new Date().toISOString(),
-    };
-
-    installations.set(cloudId, installation);
-    saveData();
-
-    console.log("Installation stored:", installation);
-
-    res.status(200).json({ success: true });
-  } catch (error) {
-    console.error("Installation processing failed:", error);
-    res.status(500).json({ error: "Failed to process installation" });
+    ).then((response) => response.json() as Promise<{ baseUrl: string }>),
+    (error) => {
+      console.error("Installation processing failed:", error);
+      return StandardError.getOrDefault(500).error(
+        "Failed to process installation",
+      ).error;
+    },
+  );
+  if (serverInfoResult.isErr()) {
+    return res
+      .status(serverInfoResult.error.status)
+      .json({ error: serverInfoResult.error.detail });
   }
+  const serverData = serverInfoResult.value;
+  console.log("Jira server info fetched:", JSON.stringify(serverData));
+
+  // Store installation
+  const installation: JiraInstallation = {
+    cloudId,
+    installationId,
+    baseUrl: serverData.baseUrl,
+    installerAccountId,
+    installedAt: new Date().toISOString(),
+  };
+
+  installations.set(cloudId, installation);
+  saveData();
+
+  console.log("Installation stored:", installation);
+
+  res.status(200).json({ success: true });
 });
 
 // ============================================================================
@@ -705,8 +784,17 @@ async function handleA2aJsonRpc(
       return;
     }
 
-    const result = await handler({ params, id, cloudId });
-    const successResponse = { jsonrpc: "2.0", id, result };
+    const handlerResult = await handler({ params, id, cloudId });
+    if (handlerResult.isErr()) {
+      const { code, message: errorMessage } = toJsonRpcError(
+        handlerResult.error,
+      );
+      console.error("JSON-RPC error:", { method, error: handlerResult.error });
+      res.json({ jsonrpc: "2.0", id, error: { code, message: errorMessage } });
+      return;
+    }
+
+    const successResponse = { jsonrpc: "2.0", id, result: handlerResult.value };
 
     if (method === JSON_RPC_METHODS.MESSAGE_SEND) {
       console.log(
@@ -723,8 +811,9 @@ async function handleA2aJsonRpc(
 
     res.json(successResponse);
   } catch (error) {
+    // Last-resort safety net for genuinely unexpected exceptions — expected
+    // domain errors are returned as a Result and handled above.
     const errorMessage = error instanceof Error ? error.message : String(error);
-    const errorCode = JSON_RPC_ERROR_CODES.get(errorMessage) ?? -32603;
     console.error("JSON-RPC error:", {
       method,
       error: errorMessage,
@@ -733,7 +822,7 @@ async function handleA2aJsonRpc(
     res.json({
       jsonrpc: "2.0",
       id,
-      error: { code: errorCode, message: errorMessage },
+      error: { code: DEFAULT_JSON_RPC_ERROR_CODE, message: errorMessage },
     });
   }
 }
