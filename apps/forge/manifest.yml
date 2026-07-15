@@ -29,7 +29,7 @@ modules:
         agent2Agent:
           jsonRpcTransport:
             endpoint: a2a-json-rpc-endpoint
-            streaming: false
+            streaming: true
   trigger:
     - key: installation-trigger
       endpoint: atlassian-installed-endpoint
