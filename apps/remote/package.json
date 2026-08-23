@@ -19,6 +19,8 @@
   },
   "dependencies": {
     "@a2a-js/sdk": "^1.0",
+    "@forge-ahead/errors": "github:ibuchanan/forge-ahead-errors",
+    "@forge-ahead/logging": "github:ibuchanan/forge-ahead-logging",
     "@forge-ahead/remote": "github:ibuchanan/forge-ahead-remote",
     "express": "^5.2"
   },

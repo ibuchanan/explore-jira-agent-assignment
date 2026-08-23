@@ -57,8 +57,7 @@ async function signedFit(
   return `${header}.${body}.${signature}`;
 }
 
-async function listen(server: Server): Promise<string> {
-  server.listen(0, "127.0.0.1");
+async function url(server: Server): Promise<string> {
   await once(server, "listening");
   const address = server.address();
   if (!address || typeof address === "string")
@@ -121,12 +120,14 @@ async function createFixture(
       }),
     );
   });
-  const jwksUrl = `${await listen(jwks)}/jwks`;
+  jwks.listen(0, "127.0.0.1");
+  const jwksUrl = `${await url(jwks)}/jwks`;
   t.after(() => close(jwks));
 
   const app = createA2aServer(appId ? { appId, jwksUrl } : { appAri, jwksUrl });
-  const baseUrl = await listen(app);
-  t.after(() => close(app));
+  const server = app.listen(0, "127.0.0.1");
+  const baseUrl = await url(server);
+  t.after(() => close(server));
 
   return {
     token: () => token,
