@@ -17,6 +17,7 @@
     "forge:deploy:tunnel:approve-system-user-change": "bash scripts/deploy-tunnel.sh --approve-system-user-change",
     "forge:install": "npm run --workspace=rovo-agent-connector forge:install",
     "forge:uninstall": "npm run --workspace=rovo-agent-connector forge:uninstall",
+    "forge:upgrade": "npm run --workspace=rovo-agent-connector forge:upgrade",
     "format": "npm run --workspaces --if-present format",
     "format:scripts": "shfmt -w scripts/*.sh test/*.sh",
     "lint": "npm run --workspaces --if-present lint",

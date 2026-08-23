@@ -7,12 +7,12 @@ default: true
 steps:
   - event: status-update
     state: working
-    message: "Starting work on this task."
+    message: "**Starting work on this task.**"
   - event: status-update
-    message: "Looking into the details..."
-    delayMs: 20
+    message: "**Looking into the details...**"
+    delayMs: 5000
   - event: status-update
     state: completed
-    message: "Finished the task."
+    message: "**Finished the task.**"
     final: true
-    delayMs: 20
+    delayMs: 5000

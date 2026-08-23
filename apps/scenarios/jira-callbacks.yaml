@@ -6,7 +6,7 @@ match:
 steps:
   - event: status-update
     state: working
-    message: "Preparing simulated Jira callbacks."
+    message: "**Preparing simulated Jira callbacks.**"
   - event: jira-callback
     action: read
   - event: jira-callback
@@ -17,5 +17,5 @@ steps:
     action: transition
   - event: status-update
     state: completed
-    message: "Finished simulated Jira callbacks; no Jira work item was changed."
+    message: "**Finished simulated Jira callbacks; no Jira work item was changed.**"
     final: true

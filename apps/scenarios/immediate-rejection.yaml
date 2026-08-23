@@ -8,5 +8,5 @@ match:
 steps:
   - event: status-update
     state: rejected
-    message: "This request cannot be accepted."
+    message: "**This request cannot be accepted.**"
     final: true

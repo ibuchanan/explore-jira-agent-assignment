@@ -10,5 +10,5 @@ match:
 steps:
   - event: status-update
     state: rejected
-    message: "This request cannot be accepted: the target repository no longer exists and no recoverable access path is available."
+    message: "**This request cannot be accepted: the target repository no longer exists and no recoverable access path is available.**"
     final: true

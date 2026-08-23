@@ -12,24 +12,24 @@ match:
 steps:
   - event: status-update
     state: working
-    message: "Starting work on the hotfix."
+    message: "**Starting work on the hotfix.**"
   - event: status-update
-    message: "Preparing the change and running the local test suite."
-    delayMs: 20
+    message: "**Preparing the change and running the local test suite.**"
+    delayMs: 5000
   - event: status-update
     state: auth-required
-    message: "Approval required: I need permission to push commits to the release repository before I can continue."
+    message: "**Approval required: I need permission to push commits to the release repository before I can continue.**"
     waitForUserInput: true
-    delayMs: 20
+    delayMs: 5000
   - event: status-update
     state: working
-    message: "Thanks, resuming work now that repository access is approved."
-    delayMs: 20
+    message: "**Thanks, resuming work now that repository access is approved.**"
+    delayMs: 5000
   - event: status-update
-    message: "Pushing the hotfix commit to the release repository."
-    delayMs: 20
+    message: "**Pushing the hotfix commit to the release repository.**"
+    delayMs: 5000
   - event: status-update
     state: completed
-    message: "Pushed the hotfix and verified the release pipeline succeeded."
+    message: "**Pushed the hotfix and verified the release pipeline succeeded.**"
     final: true
-    delayMs: 20
+    delayMs: 5000

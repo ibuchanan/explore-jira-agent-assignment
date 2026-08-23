@@ -3,8 +3,8 @@ import {
   type Artifact,
   type Message,
   Role,
-  type TaskStatus,
   TaskState,
+  type TaskStatus,
 } from "@a2a-js/sdk";
 import {
   AgentEvent,
@@ -37,9 +37,11 @@ import {
 
 type DiagnosticEvent = Record<string, unknown>;
 type Diagnostics = (event: DiagnosticEvent) => void;
+type Delay = (milliseconds: number) => Promise<void>;
 type ServerOptions = {
   appAri?: string;
   appId?: string;
+  delay?: Delay;
   diagnostics?: Diagnostics;
   enableRealJiraCallbacks?: boolean;
   jiraFetch?: typeof fetch;
@@ -99,7 +101,7 @@ function agentMessage(
           {
             content: { $case: "text", value: text },
             filename: "",
-            mediaType: "text/plain",
+            mediaType: "text/markdown",
             metadata: {},
           },
         ]
@@ -123,7 +125,7 @@ function artifact(
     parts: step.parts.map((part) => ({
       content: { $case: "text", value: part.text ?? "" },
       filename: "",
-      mediaType: "text/plain",
+      mediaType: "text/markdown",
       metadata: {},
     })),
     metadata: step.metadata ?? {},
@@ -228,6 +230,7 @@ async function runJiraCallback(
 function createAgentExecutor(
   scenarios: LoadedScenario[],
   diagnostics: Diagnostics,
+  delay: Delay,
   enableRealJiraCallbacks: boolean,
   jiraFetch: typeof fetch,
 ): AgentExecutor {
@@ -282,8 +285,7 @@ function createAgentExecutor(
       ) {
         const step = scenario.steps[index];
         if (!step) return;
-        if (step.delayMs)
-          await new Promise((resolve) => setTimeout(resolve, step.delayMs));
+        if (step.delayMs) await delay(step.delayMs);
         if (session.canceled) return;
         session.nextStep = index + 1;
 
@@ -511,6 +513,8 @@ function createAgentExecutor(
 export function createA2aServer({
   appId = process.env.FORGE_APP_ID,
   appAri = appId && `ari:cloud:ecosystem::app/${appId}`,
+  delay = (milliseconds) =>
+    new Promise((resolve) => setTimeout(resolve, milliseconds)),
   diagnostics,
   enableRealJiraCallbacks = process.env
     .ENABLE_REAL_JIRA_CALLBACK_SMOKE_TESTS === "true",
@@ -542,6 +546,7 @@ export function createA2aServer({
     createAgentExecutor(
       loadedScenarios,
       reportDiagnostics,
+      delay,
       enableRealJiraCallbacks,
       jiraFetch,
     ),

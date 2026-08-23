@@ -7,4 +7,4 @@ steps:
   - event: jira-callback
     action: read
     result: rejected
-    message: "Simulated Jira read was rejected before acceptance; no Jira work item was read."
+    message: "**Simulated Jira read was rejected before acceptance; no Jira work item was read.**"

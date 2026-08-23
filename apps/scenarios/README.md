@@ -54,12 +54,12 @@ steps:                        # required, non-empty, played back in order
     message: "Starting work on this task."
   - event: status-update
     message: "Looking into the details..."
-    delayMs: 20
+    delayMs: 5000
   - event: status-update
     state: completed
     message: "Finished the task."
     final: true
-    delayMs: 20
+    delayMs: 5000
 ```
 
 ### Step fields
@@ -147,6 +147,7 @@ and resumption policy.
 | --- | --- |
 | `default-happy-path.yaml` | The Default Scenario: a small generic happy path used when nothing else matches. |
 | `coding-agent-happy-path.yaml` | A full Simulated Coding Remote Agent run: Thinking Process, Internal Thinking, Tool Activity, a chunked patch Artifact, and a completed implementation-summary Artifact. |
+| `markdown-happy-path.yaml` | A status-update-only Markdown showcase for observing Jira rendering of ordinary Markdown constructs. |
 | `auth-required-approval-resumption.yaml` | A Tool Approval pause (`auth-required`) mid-task, then resumption to `working` and completion. |
 | `input-required-clarification-resumption.yaml` | An Input Need pause (`input-required`) mid-task, then resumption to `working` and completion. |
 | `cancellation-during-work.yaml` | A task with a streamed Artifact that is canceled mid-work; the A2A Simulator's `tasks/cancel` handling ends the stream with `canceled` rather than this scenario's own `completed` step. |

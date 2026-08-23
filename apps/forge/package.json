@@ -10,6 +10,7 @@
     "forge:deploy:approve-system-user-change": "bash ../../scripts/env-var.sh 'forge deploy --environment \"$FORGE_ENVIRONMENT\" --approve SYSTEM_USER_CHANGE_RULE'",
     "forge:install": "bash ../../scripts/env-var.sh 'forge install --site \"$FORGE_SITE\" --product \"$FORGE_PRODUCT\" --environment \"$FORGE_ENVIRONMENT\" --non-interactive'",
     "forge:uninstall": "bash ../../scripts/env-var.sh 'forge uninstall --site \"$FORGE_SITE\" --product \"$FORGE_PRODUCT\" --environment \"$FORGE_ENVIRONMENT\"'",
+    "forge:upgrade": "bash ../../scripts/env-var.sh 'forge install --upgrade --site \"$FORGE_SITE\" --product \"$FORGE_PRODUCT\" --environment \"$FORGE_ENVIRONMENT\" --non-interactive'",
     "lint": "bash ../../scripts/env-var.sh 'forge lint'"
   }
 }

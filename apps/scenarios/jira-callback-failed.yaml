@@ -6,8 +6,8 @@ match:
 steps:
   - event: status-update
     state: working
-    message: "Preparing the simulated Jira comment."
+    message: "**Preparing the simulated Jira comment.**"
   - event: jira-callback
     action: comment
     result: failed
-    message: "Simulated Jira comment failed after acceptance; no Jira comment was created."
+    message: "**Simulated Jira comment failed after acceptance; no Jira comment was created.**"

@@ -1,0 +1,35 @@
+# Renderer-observation scenario: ordinary Markdown constructs in status updates.
+id: markdown-happy-path
+match:
+  contains:
+    - "show markdown"
+steps:
+  - event: status-update
+    state: working
+    message: "# Markdown showcase\n\nStreaming one common construct per update."
+  - event: status-update
+    message: "**Bold text** and *italic text* appear in this update."
+    delayMs: 5000
+  - event: status-update
+    message: "- First list item\n- Second list item"
+    delayMs: 5000
+  - event: status-update
+    message: "1. First ordered step\n2. Second ordered step"
+    delayMs: 5000
+  - event: status-update
+    message: "> A short blockquote is useful for a highlighted observation."
+    delayMs: 5000
+  - event: status-update
+    message: "Use `session.refresh()` before validation."
+    delayMs: 5000
+  - event: status-update
+    message: "```typescript\nconst refreshed = await session.refresh();\n```"
+    delayMs: 5000
+  - event: status-update
+    message: "Read the [A2A protocol](https://a2a-protocol.org/) for protocol context."
+    delayMs: 5000
+  - event: status-update
+    state: completed
+    message: "- [x] Markdown updates sent\n- [x] Showcase complete"
+    final: true
+    delayMs: 5000

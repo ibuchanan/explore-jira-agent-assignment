@@ -6,15 +6,15 @@ match:
 steps:
   - event: status-update
     state: working
-    message: "Preparing the simulated Jira transition."
+    message: "**Preparing the simulated Jira transition.**"
   - event: jira-callback
     action: transition
     result: auth-required
-    message: "Simulated Jira transition needs authorization; no Jira work item was changed."
+    message: "**Simulated Jira transition needs authorization; no Jira work item was changed.**"
   - event: status-update
     state: working
-    message: "Resuming the simulated Jira transition after authorization."
+    message: "**Resuming the simulated Jira transition after authorization.**"
   - event: status-update
     state: completed
-    message: "Finished the authorized simulated Jira transition; no Jira work item was changed."
+    message: "**Finished the authorized simulated Jira transition; no Jira work item was changed.**"
     final: true

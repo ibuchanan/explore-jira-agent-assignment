@@ -145,6 +145,10 @@ async function createFixture(
 
   const appResult = createA2aServer({
     ...(appId ? { appId } : { appAri }),
+    delay: (milliseconds: number) =>
+      new Promise((resolve) =>
+        setTimeout(resolve, Math.min(milliseconds, 100)),
+      ),
     jwksUrl,
     ...(diagnostics ? { diagnostics } : {}),
     ...(scenarios ? { scenarios } : {}),
@@ -228,7 +232,11 @@ test("returns the default scenario task for a verified SendMessage request", asy
   assert.match(body.result.task.id, /^[0-9a-f-]{36}$/i);
   assert.equal(body.result.task.status.state, "TASK_STATE_COMPLETED");
   assert.deepEqual(body.result.task.status.message.parts, [
-    { mediaType: "text/plain", metadata: {}, text: "Finished the task." },
+    {
+      mediaType: "text/markdown",
+      metadata: {},
+      text: "**Finished the task.**",
+    },
   ]);
   assert.equal(body.result.task.status.message.role, "ROLE_AGENT");
   assert.equal(body.result.task.status.message.taskId, body.result.task.id);
@@ -260,7 +268,11 @@ test("runs the default scenario for an unmatched SendMessage", async (t) => {
   const body = (await response.json()) as CompletedResponse;
   assert.equal(body.result.task.status.state, "TASK_STATE_COMPLETED");
   assert.deepEqual(body.result.task.status.message.parts, [
-    { mediaType: "text/plain", metadata: {}, text: "Finished the task." },
+    {
+      mediaType: "text/markdown",
+      metadata: {},
+      text: "**Finished the task.**",
+    },
   ]);
 });
 
@@ -288,9 +300,9 @@ test("selects the first case-insensitive matching scenario", async (t) => {
   assert.equal(body.result.task.status.state, "TASK_STATE_COMPLETED");
   assert.deepEqual(body.result.task.status.message.parts, [
     {
-      mediaType: "text/plain",
+      mediaType: "text/markdown",
       metadata: {},
-      text: "Fixed the login bug and verified tests pass.",
+      text: "## ✅ Login bug fixed\n\nSession tokens now refresh before validation; the checkout suite passed.",
     },
   ]);
 });
@@ -752,16 +764,16 @@ test("streams coding progress and chunked artifacts in declared order", async (t
   assert.equal(response.status, 200);
   const stream = await response.text();
   const events = [
-    "Starting work on the login bug.",
-    "Inspecting the repository",
-    "Internal thinking:",
-    "Drafting a code change",
+    "Starting login-bug fix",
+    "### Investigation",
+    "Internal thinking",
+    "### Change plan",
     "patch-1",
     "trailing whitespace cleanup",
-    "Tool: running the checkout test suite",
-    "Tool result: all 42 tests passed.",
+    "### Verification",
+    "42 tests passed",
     "implementation-summary-1",
-    "Fixed the login bug and verified tests pass.",
+    "## ✅ Login bug fixed",
   ];
   let previous = -1;
   for (const event of events) {
@@ -769,6 +781,49 @@ test("streams coding progress and chunked artifacts in declared order", async (t
     assert.ok(index > previous, `expected ${event} after the previous event`);
     previous = index;
   }
+});
+
+test("streams a Markdown showcase as ordered status updates", async (t) => {
+  const { request, token } = await createFixture(t);
+  const response = await request({
+    token: token(),
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: "markdown-stream",
+      method: "SendStreamingMessage",
+      params: {
+        message: {
+          contextId: "markdown-context",
+          messageId: "markdown-message",
+          role: "ROLE_USER",
+          parts: [{ text: "Please show markdown" }],
+        },
+      },
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  const stream = await response.text();
+  let previous = -1;
+  for (const content of [
+    "Markdown showcase",
+    "Bold text",
+    "First list item",
+    "First ordered step",
+    "short blockquote",
+    "session.refresh()",
+    "const refreshed",
+    "A2A protocol",
+    "Showcase complete",
+  ]) {
+    const index = stream.indexOf(content);
+    assert.ok(
+      index > previous,
+      `expected ${content} after the previous update`,
+    );
+    previous = index;
+  }
+  assert.match(stream, /text\/markdown/);
 });
 
 test("streams rejected and failed scenarios with their correct terminal outcomes", async (t) => {

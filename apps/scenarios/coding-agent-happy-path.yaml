@@ -1,6 +1,5 @@
-# Simulated Coding Remote Agent: a coherent successful coding task showing
-# Thinking Process, optional Internal Thinking, model progress, and Tool
-# Activity as A2A-compatible content, ending in a brief `completed` message.
+# Simulated Coding Remote Agent: a paced Markdown-rich coding task that
+# demonstrates progress, internal thinking, tool activity, and artifacts.
 # @see specs/tickets/05-coding-agent-content-happy-path.md
 id: coding-agent-happy-path
 match:
@@ -9,16 +8,16 @@ match:
 steps:
   - event: status-update
     state: working
-    message: "Starting work on the login bug."
+    message: "## Starting login-bug fix\n\nI’m tracing the session lifecycle and will report each milestone."
   - event: status-update
-    message: "Inspecting the repository and locating the code paths related to the login bug."
-    delayMs: 20
+    message: "### Investigation\n\n- Located the login/session code path\n- Comparing **refresh** and **validation** order"
+    delayMs: 5000
   - event: status-update
-    message: "Internal thinking: the validation check runs before the session token is refreshed, so fixing the order should resolve the bug."
-    delayMs: 20
+    message: "> **Internal thinking**\n> Validation currently runs before token refresh. Reversing that order should preserve valid renewed sessions."
+    delayMs: 5000
   - event: status-update
-    message: "Drafting a code change that reorders the session validation."
-    delayMs: 20
+    message: "### Change plan\n\n1. Refresh the session token\n2. Validate the refreshed session\n3. Keep the existing failure handling"
+    delayMs: 5000
   - event: artifact-update
     artifact:
       artifactId: patch-1
@@ -28,23 +27,23 @@ steps:
         kind: patch
       parts:
         - kind: text
-          text: "--- a/session.ts\n+++ b/session.ts\n@@ refresh before validate"
-    delayMs: 20
+          text: "```diff\n--- a/session.ts\n+++ b/session.ts\n@@ refresh before validate\n+await refreshToken(session);\n validateSession(session);\n```"
+    delayMs: 5000
   - event: artifact-update
     artifact:
       artifactId: patch-1
       parts:
         - kind: text
-          text: "\n@@ trailing whitespace cleanup"
+          text: "\n```diff\n@@ trailing whitespace cleanup\n-const valid = validateSession(session);  \n+const valid = validateSession(session);\n```"
     append: true
     lastChunk: true
-    delayMs: 20
+    delayMs: 5000
   - event: status-update
-    message: "Tool: running the checkout test suite against the change."
-    delayMs: 20
+    message: "### Verification\n\n\U0001F9EA **Running** the checkout test suite against the proposed change."
+    delayMs: 5000
   - event: status-update
-    message: "Tool result: all 42 tests passed."
-    delayMs: 20
+    message: "✅ **42 tests passed**\n\nThe checkout flow remains green after the session-order change."
+    delayMs: 5000
   - event: artifact-update
     artifact:
       artifactId: implementation-summary-1
@@ -54,10 +53,10 @@ steps:
         kind: implementation-summary
       parts:
         - kind: text
-          text: "Reordered session validation so the token refresh runs first, verified by the checkout test suite."
-    delayMs: 20
+          text: "## Implementation summary\n\n- Refreshes the token **before** validation\n- Preserves existing validation behavior\n- Verified by the checkout test suite"
+    delayMs: 5000
   - event: status-update
     state: completed
-    message: "Fixed the login bug and verified tests pass."
+    message: "## ✅ Login bug fixed\n\nSession tokens now refresh before validation; the checkout suite passed."
     final: true
-    delayMs: 20
+    delayMs: 5000

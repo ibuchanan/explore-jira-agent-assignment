@@ -6,12 +6,12 @@ match:
 steps:
   - event: status-update
     state: input-required
-    message: "Input required: please confirm the target environment before I begin work."
+    message: "**Input required: please confirm the target environment before I begin work.**"
     waitForUserInput: true
   - event: status-update
     state: working
-    message: "Thanks, starting work with the confirmed target environment."
+    message: "**Thanks, starting work with the confirmed target environment.**"
   - event: status-update
     state: completed
-    message: "Completed the requested work for the confirmed target environment."
+    message: "**Completed the requested work for the confirmed target environment.**"
     final: true
