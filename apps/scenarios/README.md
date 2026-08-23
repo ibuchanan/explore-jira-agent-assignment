@@ -65,11 +65,13 @@ steps:                        # required, non-empty, played back in order
 ### Step fields
 
 Each entry in `steps` is played back in order, after waiting `delayMs`
-milliseconds (default `0`). A step is one of two `event` kinds:
+milliseconds (default `0`). A step is one of three `event` kinds:
 
 | Field | Applies to | Meaning |
 | --- | --- | --- |
-| `event` | all steps | `status-update` or `artifact-update` |
+| `event` | all steps | `status-update`, `artifact-update`, or `jira-callback` |
+| `action` | `jira-callback` | `read`, `comment`, `mention`, or `transition`. It is always simulated by this service. |
+| `result` | `jira-callback` | Optional outcome: `simulated` (default), `auth-required`, `rejected`, or `failed`. |
 | `state` | `status-update` | An A2A task state (see below). Omit it for a step that only carries content, with no lifecycle change. |
 | `message` | `status-update` | The text streamed to the user for this step. |
 | `final` | `status-update` | `true` marks this step as the terminal event; the stream ends here. |
@@ -151,3 +153,7 @@ and resumption policy.
 | `repository-access-revoked-failure.yaml` | An unrecoverable failure after acceptance (`failed`), with a diagnostic unpushed-patch Artifact preserved for manual follow-up. |
 | `repository-access-unavailable-rejection.yaml` | A pre-execution refusal (`rejected`) because no recoverable access path exists. |
 | `immediate-rejection.yaml` | The minimal shape of a scenario that never reaches `working` at all. |
+| `jira-callbacks.yaml` | Simulated Jira reads, comments, invoker mentions, and transitions without mutating Jira. |
+| `jira-callback-auth-required.yaml` | A simulated Jira callback that pauses at `auth-required`. |
+| `jira-callback-rejected.yaml` | A pre-acceptance rejected simulated Jira callback. |
+| `jira-callback-failed.yaml` | A post-acceptance failed simulated Jira callback. |

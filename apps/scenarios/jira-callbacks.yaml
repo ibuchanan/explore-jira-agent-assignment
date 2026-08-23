@@ -1,0 +1,21 @@
+# Demonstrates every remote-to-Jira action without mutating Jira.
+id: jira-callbacks
+match:
+  contains:
+    - "simulate jira callbacks"
+steps:
+  - event: status-update
+    state: working
+    message: "Preparing simulated Jira callbacks."
+  - event: jira-callback
+    action: read
+  - event: jira-callback
+    action: comment
+  - event: jira-callback
+    action: mention
+  - event: jira-callback
+    action: transition
+  - event: status-update
+    state: completed
+    message: "Finished simulated Jira callbacks; no Jira work item was changed."
+    final: true

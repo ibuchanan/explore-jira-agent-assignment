@@ -420,6 +420,213 @@ test("emits safe correlated diagnostics for a selected scenario", async (t) => {
   assert.equal(output.includes("Sensitive comment body"), false);
 });
 
+test("simulates a correlated Jira comment callback without mutating Jira", async (t) => {
+  const diagnostics: DiagnosticEvent[] = [];
+  const scenarios: LoadedScenario[] = [
+    {
+      id: "simulated-comment",
+      default: true,
+      match: { contains: [] },
+      steps: [
+        {
+          event: "status-update",
+          state: "working",
+          message: "Preparing the Jira update.",
+        },
+        {
+          event: "jira-callback",
+          action: "comment",
+          result: "simulated",
+          message:
+            "Simulated Jira comment update; no Jira comment was created.",
+        } as unknown as LoadedScenario["steps"][number],
+        {
+          event: "status-update",
+          state: "completed",
+          message: "Finished the simulated callback.",
+        },
+      ],
+    },
+  ];
+  const { request, token } = await createFixture(t, {
+    diagnostics: (event) => diagnostics.push(event),
+    scenarios,
+  });
+  const response = await request({
+    token: token(),
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: "simulated-comment",
+      method: "SendStreamingMessage",
+      params: {
+        message: {
+          contextId: "callback-context",
+          messageId: "callback-message",
+          role: "ROLE_USER",
+          parts: [
+            {
+              data: {
+                invocationContext: {
+                  workItem: { id: "PROJ-42" },
+                  tenantId: "tenant-1",
+                  invokerId: "user-1",
+                },
+              },
+            },
+          ],
+        },
+      },
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  assert.match(
+    await response.text(),
+    /Simulated Jira comment update; no Jira comment was created/,
+  );
+  assert.ok(
+    diagnostics.some(
+      (event) =>
+        event.event === "jira-callback" &&
+        event.action === "comment" &&
+        event.result === "simulated" &&
+        event.tenantId === "tenant-1" &&
+        event.invokerId === "user-1" &&
+        event.workItemId === "PROJ-42",
+    ),
+  );
+});
+
+test("reports every simulated Jira callback action with active invocation correlation", async (t) => {
+  const diagnostics: DiagnosticEvent[] = [];
+  const scenarios: LoadedScenario[] = [
+    {
+      id: "all-callbacks",
+      default: true,
+      match: { contains: [] },
+      steps: [
+        { event: "status-update", state: "working" },
+        ...(["read", "comment", "mention", "transition"] as const).map(
+          (action) => ({
+            event: "jira-callback",
+            action,
+            result: "simulated" as const,
+          }),
+        ),
+        { event: "status-update", state: "completed" },
+      ],
+    },
+  ];
+  const { request, token } = await createFixture(t, {
+    diagnostics: (event) => diagnostics.push(event),
+    scenarios,
+  });
+  const response = await request({
+    token: token(),
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: "all-callbacks",
+      method: "SendStreamingMessage",
+      params: {
+        message: {
+          contextId: "callbacks-context",
+          messageId: "callbacks-message",
+          role: "ROLE_USER",
+          parts: [
+            {
+              data: {
+                invocationContext: {
+                  workItem: { id: "PROJ-42" },
+                  tenantId: "tenant-1",
+                  invokerId: "user-1",
+                },
+              },
+            },
+          ],
+        },
+      },
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  const stream = await response.text();
+  for (const action of ["read", "comment", "mention", "transition"]) {
+    assert.match(
+      stream,
+      new RegExp(`Simulated Jira ${action} callback \\(simulated\\)`),
+    );
+    assert.ok(
+      diagnostics.some(
+        (event) =>
+          event.event === "jira-callback" &&
+          event.action === action &&
+          event.result === "simulated" &&
+          event.tenantId === "tenant-1" &&
+          event.invokerId === "user-1",
+      ),
+    );
+  }
+});
+
+test("maps simulated callback outcomes and unavailable context to visible task results", async (t) => {
+  const requestFor = async (
+    t: TestContext,
+    result: "auth-required" | "rejected" | "failed" | "simulated",
+    context: Record<string, unknown>,
+  ) => {
+    const scenarios: LoadedScenario[] = [
+      {
+        id: `callback-${result}`,
+        default: true,
+        match: { contains: [] },
+        steps: [
+          { event: "status-update", state: "working" },
+          { event: "jira-callback", action: "transition", result },
+          { event: "status-update", state: "completed" },
+        ],
+      },
+    ];
+    const { request, token } = await createFixture(t, { scenarios });
+    const response = await request({
+      token: token(),
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: `callback-${result}`,
+        method: "SendMessage",
+        params: {
+          message: {
+            contextId: `callback-${result}-context`,
+            messageId: `callback-${result}-message`,
+            role: "ROLE_USER",
+            parts: [{ data: { invocationContext: context } }],
+          },
+        },
+      }),
+    });
+    assert.equal(response.status, 200);
+    return JSON.stringify(await response.json());
+  };
+  const context = {
+    workItem: { id: "PROJ-42" },
+    tenantId: "tenant-1",
+    invokerId: "user-1",
+  };
+
+  assert.match(
+    await requestFor(t, "auth-required", context),
+    /TASK_STATE_AUTH_REQUIRED/,
+  );
+  assert.match(await requestFor(t, "rejected", context), /TASK_STATE_REJECTED/);
+  assert.match(await requestFor(t, "failed", context), /TASK_STATE_FAILED/);
+  assert.match(
+    await requestFor(t, "simulated", {
+      tenantId: "tenant-1",
+      invokerId: "user-1",
+    }),
+    /active invocation context is unavailable; no Jira action was performed/,
+  );
+});
+
 test("streams coding progress and chunked artifacts in declared order", async (t) => {
   const { request, token } = await createFixture(t);
   const response = await request({

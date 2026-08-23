@@ -12,6 +12,7 @@ type ScenarioArtifact = {
 };
 
 export type ScenarioStep = {
+  action?: "read" | "comment" | "mention" | "transition";
   append?: boolean;
   artifact?: ScenarioArtifact;
   delayMs?: number;
@@ -19,6 +20,7 @@ export type ScenarioStep = {
   final?: boolean;
   lastChunk?: boolean;
   message?: string;
+  result?: "simulated" | "auth-required" | "rejected" | "failed";
   state?: string;
   waitForUserInput?: boolean;
 };

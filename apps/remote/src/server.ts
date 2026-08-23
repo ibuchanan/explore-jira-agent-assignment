@@ -172,7 +172,11 @@ function createAgentExecutor(
         selection: existing ? "resume" : selection.category,
         workItemAvailability: invocationContext.workItem.availability,
         commentAvailability: invocationContext.comment.availability,
-        callbackReadiness: "not-configured",
+        callbackReadiness: scenario.steps.some(
+          (step) => step.event === "jira-callback",
+        )
+          ? "simulated"
+          : "not-configured",
       });
 
       for (
@@ -198,6 +202,79 @@ function createAgentExecutor(
               metadata: {},
             }),
           );
+          continue;
+        }
+        if (step.event === "jira-callback" && step.action) {
+          const contextUnavailable =
+            invocationContext.workItem.availability !== "available" ||
+            !session.tenantId ||
+            !session.invokerId;
+          const result = contextUnavailable
+            ? "context-unavailable"
+            : (step.result ?? "simulated");
+          const state =
+            result === "auth-required"
+              ? TaskState.TASK_STATE_AUTH_REQUIRED
+              : result === "rejected"
+                ? TaskState.TASK_STATE_REJECTED
+                : result === "failed"
+                  ? TaskState.TASK_STATE_FAILED
+                  : (session.status?.state ?? TaskState.TASK_STATE_WORKING);
+          const message =
+            step.message ??
+            (result === "context-unavailable"
+              ? "Simulated Jira callback skipped because the active invocation context is unavailable; no Jira action was performed."
+              : `Simulated Jira ${step.action} callback (${result}); no Jira action was performed.`);
+          const status = {
+            state,
+            message: agentMessage(taskId, contextId, message),
+            timestamp: new Date().toISOString(),
+          };
+          session.status = status;
+          diagnostics({
+            event: "jira-callback",
+            taskId: session.taskId,
+            contextId: session.contextId,
+            sessionId: session.sessionId,
+            tenantId: session.tenantId,
+            invokerId: session.invokerId,
+            ...(invocationContext.workItem.id
+              ? { workItemId: invocationContext.workItem.id }
+              : {}),
+            scenarioId: scenario.id,
+            action: step.action,
+            result,
+          });
+          if (index === 0) {
+            eventBus.publish(
+              AgentEvent.task(
+                task
+                  ? { ...task, status }
+                  : {
+                      id: taskId,
+                      contextId,
+                      artifacts: [],
+                      history: [],
+                      metadata: {},
+                      status,
+                    },
+              ),
+            );
+          } else {
+            eventBus.publish(
+              AgentEvent.statusUpdate({
+                taskId,
+                contextId,
+                status,
+                metadata: {},
+              }),
+            );
+          }
+          if (result === "auth-required") return;
+          if (["rejected", "failed"].includes(result)) {
+            sessions.delete(taskId);
+            return;
+          }
           continue;
         }
         if (step.event !== "status-update") {
