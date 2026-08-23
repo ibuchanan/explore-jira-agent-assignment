@@ -17,6 +17,14 @@ steps:
   - event: status-update
     message: "Reviewing the work item for acceptance criteria."
     delayMs: 20
+  - event: artifact-update
+    artifact:
+      artifactId: checkout-plan-1
+      name: "checkout-plan.md"
+      description: "Draft plan retained while clarification is pending."
+      parts:
+        - kind: text
+          text: "Plan the checkout redesign once guest-checkout support is clarified."
   - event: status-update
     state: input-required
     message: "Input required: the work item doesn't say whether guest checkout must be supported. Please clarify the acceptance criteria before I continue."

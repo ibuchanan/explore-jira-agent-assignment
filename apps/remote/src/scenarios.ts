@@ -14,11 +14,13 @@ type ScenarioArtifact = {
 export type ScenarioStep = {
   append?: boolean;
   artifact?: ScenarioArtifact;
+  delayMs?: number;
   event?: string;
   final?: boolean;
   lastChunk?: boolean;
   message?: string;
   state?: string;
+  waitForUserInput?: boolean;
 };
 
 type Scenario = {

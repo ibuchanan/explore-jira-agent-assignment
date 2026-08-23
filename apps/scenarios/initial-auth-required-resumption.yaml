@@ -1,0 +1,17 @@
+# Simulated initial authorization before ordinary work begins.
+id: initial-auth-required-resumption
+match:
+  contains:
+    - "start only after approving repository access"
+steps:
+  - event: status-update
+    state: auth-required
+    message: "Approval required: please approve repository access before I begin work."
+    waitForUserInput: true
+  - event: status-update
+    state: working
+    message: "Thanks, starting work with the approved repository access."
+  - event: status-update
+    state: completed
+    message: "Completed the requested work with the approved repository access."
+    final: true

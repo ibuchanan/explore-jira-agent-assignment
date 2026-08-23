@@ -459,3 +459,234 @@ test("creates fresh task and message IDs without echoing caller data", async (t)
     false,
   );
 });
+
+test("resumes a clarification pause on the same task", async (t) => {
+  const { request, token } = await createFixture(t);
+  const initial = await request({
+    token: token(),
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: "clarification-start",
+      method: "SendMessage",
+      params: {
+        message: {
+          contextId: "clarification-context",
+          messageId: "clarification-start-message",
+          role: "ROLE_USER",
+          parts: [
+            {
+              text: "Clarify the acceptance criteria for the checkout redesign",
+            },
+          ],
+        },
+      },
+    }),
+  });
+
+  assert.equal(initial.status, 200);
+  const paused = (await initial.json()) as CompletedResponse;
+  assert.equal(paused.result.task.status.state, "TASK_STATE_INPUT_REQUIRED");
+  assert.match(
+    JSON.stringify(paused.result.task.status.message.parts),
+    /guest checkout/i,
+  );
+  assert.match(JSON.stringify(paused.result.task), /checkout-plan-1/);
+
+  const resumed = await request({
+    token: token(),
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: "clarification-resume",
+      method: "SendMessage",
+      params: {
+        message: {
+          taskId: paused.result.task.id,
+          contextId: paused.result.task.contextId,
+          messageId: "clarification-resume-message",
+          role: "ROLE_USER",
+          parts: [{ text: "Guest checkout must be supported." }],
+        },
+      },
+    }),
+  });
+
+  assert.equal(resumed.status, 200);
+  const completed = (await resumed.json()) as CompletedResponse;
+  assert.equal(completed.result.task.id, paused.result.task.id);
+  assert.match(JSON.stringify(completed.result.task), /checkout-plan-1/);
+  assert.equal(completed.result.task.status.state, "TASK_STATE_COMPLETED");
+  assert.match(
+    JSON.stringify(completed.result.task.status.message.parts),
+    /clarified acceptance criteria/i,
+  );
+});
+
+test("resumes an authorization pause on the same task", async (t) => {
+  const { request, token } = await createFixture(t);
+  const send = (id: string, message: Record<string, unknown>) =>
+    request({
+      token: token(),
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id,
+        method: "SendMessage",
+        params: { message },
+      }),
+    });
+  const initial = await send("authorization-start", {
+    contextId: "authorization-context",
+    messageId: "authorization-start-message",
+    role: "ROLE_USER",
+    parts: [{ text: "Push the hotfix to the repository" }],
+  });
+
+  assert.equal(initial.status, 200);
+  const paused = (await initial.json()) as CompletedResponse;
+  assert.equal(paused.result.task.status.state, "TASK_STATE_AUTH_REQUIRED");
+  assert.match(
+    JSON.stringify(paused.result.task),
+    /permission to push commits/i,
+  );
+
+  const resumed = await send("authorization-resume", {
+    taskId: paused.result.task.id,
+    contextId: paused.result.task.contextId,
+    messageId: "authorization-resume-message",
+    role: "ROLE_USER",
+    parts: [{ text: "Approved." }],
+  });
+
+  assert.equal(resumed.status, 200);
+  const completed = (await resumed.json()) as CompletedResponse;
+  assert.equal(completed.result.task.id, paused.result.task.id);
+  assert.equal(completed.result.task.status.state, "TASK_STATE_COMPLETED");
+  assert.match(
+    JSON.stringify(completed.result.task),
+    /release pipeline succeeded/i,
+  );
+});
+
+test("pauses before work for initial clarification and authorization", async (t) => {
+  const { request, token } = await createFixture(t);
+  for (const [state, prompt] of [
+    [
+      "TASK_STATE_INPUT_REQUIRED",
+      "Start only after confirming the target environment",
+    ],
+    [
+      "TASK_STATE_AUTH_REQUIRED",
+      "Start only after approving repository access",
+    ],
+  ]) {
+    const initial = await request({
+      token: token(),
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: `${state}-start`,
+        method: "SendMessage",
+        params: {
+          configuration: { returnImmediately: true },
+          message: {
+            contextId: `${state}-context`,
+            messageId: `${state}-start-message`,
+            role: "ROLE_USER",
+            parts: [{ text: prompt }],
+          },
+        },
+      }),
+    });
+
+    assert.equal(initial.status, 200);
+    const paused = (await initial.json()) as CompletedResponse;
+    assert.equal(paused.result.task.status.state, state);
+    assert.equal(
+      JSON.stringify(paused.result.task).includes("starting work"),
+      false,
+    );
+
+    const resumed = await request({
+      token: token(),
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: `${state}-resume`,
+        method: "SendMessage",
+        params: {
+          message: {
+            taskId: paused.result.task.id,
+            contextId: paused.result.task.contextId,
+            messageId: `${state}-resume-message`,
+            role: "ROLE_USER",
+            parts: [{ text: "Continue." }],
+          },
+        },
+      }),
+    });
+
+    assert.equal(resumed.status, 200);
+    const completed = (await resumed.json()) as CompletedResponse;
+    assert.equal(completed.result.task.id, paused.result.task.id);
+    assert.equal(completed.result.task.status.state, "TASK_STATE_COMPLETED");
+  }
+});
+
+test("cancels delayed work after retaining its earlier artifact", async (t) => {
+  const { request, token } = await createFixture(t);
+  const started = await request({
+    token: token(),
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: "cancel-start",
+      method: "SendMessage",
+      params: {
+        configuration: { returnImmediately: true },
+        message: {
+          contextId: "cancel-context",
+          messageId: "cancel-start-message",
+          role: "ROLE_USER",
+          parts: [{ text: "Start the long-running repository migration" }],
+        },
+      },
+    }),
+  });
+
+  assert.equal(started.status, 200);
+  const working = (await started.json()) as CompletedResponse;
+  await new Promise((resolve) => setTimeout(resolve, 230));
+
+  const canceled = await request({
+    token: token(),
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: "cancel-task",
+      method: "CancelTask",
+      params: { id: working.result.task.id },
+    }),
+  });
+
+  assert.equal(canceled.status, 200);
+  const canceledTask = (await canceled.json()) as {
+    result: CompletedResponse["result"]["task"];
+  };
+  assert.equal(canceledTask.result.status.state, "TASK_STATE_CANCELED");
+  assert.match(JSON.stringify(canceledTask.result), /migration-progress-1/);
+
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  const fetched = await request({
+    token: token(),
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: "get-canceled-task",
+      method: "GetTask",
+      params: { id: working.result.task.id },
+    }),
+  });
+  assert.equal(fetched.status, 200);
+  const task = (await fetched.json()) as {
+    result: CompletedResponse["result"]["task"];
+  };
+  assert.equal(task.result.status.state, "TASK_STATE_CANCELED");
+  assert.equal(
+    JSON.stringify(task.result).includes("TASK_STATE_COMPLETED"),
+    false,
+  );
+});

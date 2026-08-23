@@ -130,26 +130,57 @@ function artifact(
   };
 }
 
+type ScenarioSession = {
+  canceled: boolean;
+  nextStep: number;
+  scenario: LoadedScenario;
+  status?: TaskStatus;
+};
+
 function createAgentExecutor(scenarios: LoadedScenario[]): AgentExecutor {
+  const sessions = new Map<string, ScenarioSession>();
+
   return {
-    async execute({ taskId, contextId, userMessage }, eventBus) {
+    async execute(requestContext, eventBus) {
+      const { taskId, contextId, task, userMessage } = requestContext;
+      const existing = sessions.get(taskId);
       const startingText = textParts(userMessage.parts);
-      const scenario = selectScenario(scenarios, startingText);
-      const matched = scenario.match.contains.some((phrase) =>
-        startingText.toLowerCase().includes(phrase.toLowerCase()),
-      );
+      const scenario =
+        existing?.scenario ?? selectScenario(scenarios, startingText);
+      const session = existing ?? {
+        canceled: false,
+        nextStep: 0,
+        scenario,
+      };
+      sessions.set(taskId, session);
       log.info(
         {
           taskId,
           contextId,
           scenarioId: scenario.id,
-          selection: matched ? "match" : "default",
+          selection: existing
+            ? "resume"
+            : scenario.match.contains.some((phrase) =>
+                  startingText.toLowerCase().includes(phrase.toLowerCase()),
+                )
+              ? "match"
+              : "default",
         },
         "[A2A] executing scenario",
       );
 
-      let status: TaskStatus | undefined;
-      for (const step of scenario.steps) {
+      for (
+        let index = session.nextStep;
+        index < scenario.steps.length;
+        index++
+      ) {
+        const step = scenario.steps[index];
+        if (!step) return;
+        if (step.delayMs)
+          await new Promise((resolve) => setTimeout(resolve, step.delayMs));
+        if (session.canceled) return;
+        session.nextStep = index + 1;
+
         if (step.event === "artifact-update" && step.artifact) {
           eventBus.publish(
             AgentEvent.artifactUpdate({
@@ -170,7 +201,9 @@ function createAgentExecutor(scenarios: LoadedScenario[]): AgentExecutor {
           );
           continue;
         }
-        const state = step.state ? taskStates[step.state] : status?.state;
+        const state = step.state
+          ? taskStates[step.state]
+          : session.status?.state;
         if (!state) {
           log.warn(
             { taskId, contextId, scenarioId: scenario.id, state: step.state },
@@ -178,21 +211,26 @@ function createAgentExecutor(scenarios: LoadedScenario[]): AgentExecutor {
           );
           continue;
         }
-        status = {
+        const status = {
           state,
           message: agentMessage(taskId, contextId, step.message),
           timestamp: new Date().toISOString(),
         };
-        if (step === scenario.steps[0]) {
+        session.status = status;
+        if (index === 0) {
           eventBus.publish(
-            AgentEvent.task({
-              id: taskId,
-              contextId,
-              artifacts: [],
-              history: [],
-              metadata: {},
-              status,
-            }),
+            AgentEvent.task(
+              task
+                ? { ...task, status }
+                : {
+                    id: taskId,
+                    contextId,
+                    artifacts: [],
+                    history: [],
+                    metadata: {},
+                    status,
+                  },
+            ),
           );
         } else {
           eventBus.publish(
@@ -204,6 +242,7 @@ function createAgentExecutor(scenarios: LoadedScenario[]): AgentExecutor {
             }),
           );
         }
+        if (step.waitForUserInput) return;
         if (
           [
             TaskState.TASK_STATE_COMPLETED,
@@ -211,11 +250,30 @@ function createAgentExecutor(scenarios: LoadedScenario[]): AgentExecutor {
             TaskState.TASK_STATE_FAILED,
             TaskState.TASK_STATE_CANCELED,
           ].includes(state)
-        )
-          break;
+        ) {
+          sessions.delete(taskId);
+          return;
+        }
       }
     },
-    async cancelTask() {},
+    async cancelTask(taskId, eventBus) {
+      const session = sessions.get(taskId);
+      if (!session || session.canceled) return;
+      session.canceled = true;
+      const contextId = session.status?.message?.contextId ?? "";
+      eventBus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_CANCELED,
+            message: agentMessage(taskId, contextId, "Task canceled."),
+            timestamp: new Date().toISOString(),
+          },
+          metadata: {},
+        }),
+      );
+    },
   };
 }
 
