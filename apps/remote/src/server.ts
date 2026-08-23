@@ -28,8 +28,8 @@ type ServerOptions = {
 };
 
 const agentCard: AgentCard = {
-  name: "Minimal Connector",
-  description: "Returns a fixed completed task to verify the A2A connection.",
+  name: "Agent Simulator",
+  description: "Simulates a completed task to verify the A2A connection.",
   supportedInterfaces: [
     {
       protocolBinding: "JSONRPC",
@@ -51,6 +51,7 @@ const agentCard: AgentCard = {
 
 const agentExecutor: AgentExecutor = {
   async execute({ taskId, contextId }, eventBus) {
+    log.info({ taskId, contextId }, "[A2A] executing task");
     eventBus.publish(
       AgentEvent.task({
         id: taskId,
@@ -66,7 +67,7 @@ const agentExecutor: AgentExecutor = {
               {
                 content: {
                   $case: "text",
-                  value: "Minimal connector is working.",
+                  value: "Agent Simulator is working.",
                 },
                 filename: "",
                 mediaType: "text/plain",
@@ -103,25 +104,43 @@ export function createA2aServer({
     agentExecutor,
   );
   const app = express();
-  app.use((_, __, next) => {
-    log.info("A2A request received");
+  app.use((request, _, next) => {
+    log.info(
+      { method: request.method, path: request.path },
+      "[HTTP] request received",
+    );
     next();
   });
   app.use(
     "/a2a/json-rpc",
+    (_, __, next) => {
+      log.info("[Forge Remote/FIT] invocation token validation started");
+      next();
+    },
     forgeRemoteAuthMiddleware({
       audience: appAri,
       issuer: "forge/invocation-token",
       jwksUrl,
     }),
+    (_, __, next) => {
+      log.info("[Forge Remote/FIT] invocation token validated");
+      next();
+    },
+    (_, __, next) => {
+      log.info("[JSON-RPC] request dispatched to A2A handler");
+      next();
+    },
     jsonRpcHandler({
       requestHandler,
       userBuilder: forgeRemoteUserBuilder,
       contextBuilder: forgeRemoteServerCallContextBuilder(),
     }),
   );
-  app.use((_, response) => {
-    log.warn("A2A request rejected: unexpected HTTP method or path");
+  app.use((request, response) => {
+    log.warn(
+      { method: request.method, path: request.path },
+      "[HTTP] request rejected: no matching route",
+    );
     response.status(404).end();
   });
 

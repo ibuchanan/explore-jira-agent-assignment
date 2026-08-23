@@ -9,8 +9,8 @@ modules:
   # See: https://developer.atlassian.com/platform/forge/manifest-reference/modules/rovo-agent-connector
   rovo:agentConnector:
     - key: minimal-connector
-      name: Minimal Connector
-      description: Returns a fixed completed task to verify the A2A connection.
+      name: Agent Simulator
+      description: Simulates a completed task to verify the A2A connection.
       productContexts:
         - jira
       protocols:

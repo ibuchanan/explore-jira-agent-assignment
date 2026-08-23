@@ -72,7 +72,7 @@ The approval is intentionally not part of the default deployment command. Future
 npm run forge:install
 ```
 
-Open Jira on the configured site and invoke **Minimal Connector** through the Rovo experience. A successful smoke test returns the completed response `Minimal connector is working.`
+Open Jira on the configured site and invoke **Agent Simulator** through the Rovo experience. A successful smoke test returns the completed response `Agent Simulator is working.`
 
 Quick Tunnel URLs change when the tunnel stops. Restart Terminal 2 and rerun `npm run forge:deploy:tunnel` whenever that occurs.
 

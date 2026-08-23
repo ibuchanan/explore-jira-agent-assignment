@@ -197,7 +197,7 @@ test("returns a completed deterministic task for a verified SendMessage request"
     {
       mediaType: "text/plain",
       metadata: {},
-      text: "Minimal connector is working.",
+      text: "Agent Simulator is working.",
     },
   ]);
   assert.equal(body.result.task.status.message.role, "ROLE_AGENT");
