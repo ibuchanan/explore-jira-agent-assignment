@@ -41,8 +41,17 @@ type ServerOptions = {
   appAri?: string;
   appId?: string;
   diagnostics?: Diagnostics;
+  enableRealJiraCallbacks?: boolean;
+  jiraFetch?: typeof fetch;
   jwksUrl?: string;
   scenarios?: LoadedScenario[];
+};
+
+type JiraCallbackCredentials = {
+  apiBaseUrl: string;
+  invokerId: string;
+  tenantId: string;
+  userToken: string;
 };
 
 const taskStates: Record<string, TaskState> = {
@@ -134,9 +143,93 @@ type ScenarioSession = {
   tenantId: string;
 };
 
+function record(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function text(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function jiraCallbackCredentials(requestContext: {
+  context: { tenant?: string | undefined; user?: unknown };
+}): JiraCallbackCredentials | undefined {
+  const remoteContext = record(
+    record(requestContext.context.user).forgeRemoteContext,
+  );
+  const fit = record(remoteContext.fit);
+  const app = record(fit.app);
+  const userToken = text(
+    record(record(remoteContext.forwardedTokens).user).token,
+  );
+  const apiBaseUrl = text(app.apiBaseUrl ?? app.apiBaseURL);
+  const invokerId = text(fit.sub);
+  const tenantId = requestContext.context.tenant;
+  return apiBaseUrl && userToken && invokerId && tenantId
+    ? { apiBaseUrl, userToken, invokerId, tenantId }
+    : undefined;
+}
+
+async function runJiraCallback(
+  step: LoadedScenario["steps"][number],
+  workItemId: string,
+  credentials: JiraCallbackCredentials,
+  jiraFetch: typeof fetch,
+  accepted: boolean,
+): Promise<"completed" | "auth-required" | "rejected" | "failed"> {
+  const issuePath = `/rest/api/3/issue/${encodeURIComponent(workItemId)}`;
+  const request = (path: string, init?: RequestInit) =>
+    jiraFetch(
+      new URL(`${issuePath}${path}`, credentials.apiBaseUrl).toString(),
+      {
+        ...init,
+        headers: {
+          Authorization: `Bearer ${credentials.userToken}`,
+          ...(init?.body ? { "content-type": "application/json" } : {}),
+        },
+      },
+    );
+  const response =
+    step.action === "read"
+      ? await request("", { method: "GET" })
+      : step.action === "comment"
+        ? await request("/comment", {
+            method: "POST",
+            body: JSON.stringify({
+              body: {
+                type: "doc",
+                version: 1,
+                content: [
+                  {
+                    type: "paragraph",
+                    content: [
+                      { type: "mention", attrs: { id: credentials.invokerId } },
+                      { type: "text", text: " Jira callback smoke test." },
+                    ],
+                  },
+                ],
+              },
+            }),
+          })
+        : step.action === "transition" && step.transitionId
+          ? await request("/transitions", {
+              method: "POST",
+              body: JSON.stringify({ transition: { id: step.transitionId } }),
+            })
+          : undefined;
+  if (!response) return "rejected";
+  if (response.status === 401 || response.status === 403)
+    return "auth-required";
+  return response.ok ? "completed" : accepted ? "failed" : "rejected";
+}
+
 function createAgentExecutor(
   scenarios: LoadedScenario[],
   diagnostics: Diagnostics,
+  enableRealJiraCallbacks: boolean,
+  jiraFetch: typeof fetch,
 ): AgentExecutor {
   const sessions = new Map<string, ScenarioSession>();
 
@@ -145,6 +238,7 @@ function createAgentExecutor(
       const { taskId, contextId, task, userMessage } = requestContext;
       const existing = sessions.get(taskId);
       const invocationContext = invocationContextFromParts(userMessage.parts);
+      const trustedCredentials = jiraCallbackCredentials(requestContext);
       const selection = selectScenarioWithDiagnostic(
         scenarios,
         invocationContext,
@@ -153,12 +247,12 @@ function createAgentExecutor(
       const session = existing ?? {
         canceled: false,
         contextId,
-        invokerId: invocationContext.invokerId,
+        invokerId: trustedCredentials?.invokerId ?? invocationContext.invokerId,
         nextStep: 0,
         scenario,
         sessionId: crypto.randomUUID(),
         taskId,
-        tenantId: invocationContext.tenantId,
+        tenantId: trustedCredentials?.tenantId ?? invocationContext.tenantId,
       };
       sessions.set(taskId, session);
       diagnostics({
@@ -175,7 +269,9 @@ function createAgentExecutor(
         callbackReadiness: scenario.steps.some(
           (step) => step.event === "jira-callback",
         )
-          ? "simulated"
+          ? enableRealJiraCallbacks
+            ? "real-enabled"
+            : "simulated"
           : "not-configured",
       });
 
@@ -209,9 +305,23 @@ function createAgentExecutor(
             invocationContext.workItem.availability !== "available" ||
             !session.tenantId ||
             !session.invokerId;
+          const realCallback =
+            enableRealJiraCallbacks && step.real === true && trustedCredentials;
           const result = contextUnavailable
             ? "context-unavailable"
-            : (step.result ?? "simulated");
+            : realCallback
+              ? await runJiraCallback(
+                  step,
+                  invocationContext.workItem.id ?? "",
+                  realCallback,
+                  jiraFetch,
+                  session.status?.state === TaskState.TASK_STATE_WORKING,
+                ).catch(() =>
+                  session.status?.state === TaskState.TASK_STATE_WORKING
+                    ? "failed"
+                    : "rejected",
+                )
+              : (step.result ?? "simulated");
           const state =
             result === "auth-required"
               ? TaskState.TASK_STATE_AUTH_REQUIRED
@@ -402,6 +512,9 @@ export function createA2aServer({
   appId = process.env.FORGE_APP_ID,
   appAri = appId && `ari:cloud:ecosystem::app/${appId}`,
   diagnostics,
+  enableRealJiraCallbacks = process.env
+    .ENABLE_REAL_JIRA_CALLBACK_SMOKE_TESTS === "true",
+  jiraFetch = fetch,
   jwksUrl = ATLASSIAN_FORGE_JWKS_URL,
   scenarios,
 }: ServerOptions = {}): Result<Express, ProblemDetails> {
@@ -426,7 +539,12 @@ export function createA2aServer({
   const requestHandler = new DefaultRequestHandler(
     agentCard,
     new InMemoryTaskStore(),
-    createAgentExecutor(loadedScenarios, reportDiagnostics),
+    createAgentExecutor(
+      loadedScenarios,
+      reportDiagnostics,
+      enableRealJiraCallbacks,
+      jiraFetch,
+    ),
   );
   const app = express();
   app.use((request, _, next) => {

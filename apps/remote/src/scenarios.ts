@@ -21,7 +21,9 @@ export type ScenarioStep = {
   lastChunk?: boolean;
   message?: string;
   result?: "simulated" | "auth-required" | "rejected" | "failed";
+  real?: boolean;
   state?: string;
+  transitionId?: string;
   waitForUserInput?: boolean;
 };
 

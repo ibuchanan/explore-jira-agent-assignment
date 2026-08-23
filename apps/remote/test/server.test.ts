@@ -92,11 +92,17 @@ async function createFixture(
     appId,
     diagnostics,
     scenarios,
+    enableRealJiraCallbacks,
+    jiraFetch,
+    fitClaims = {},
   }: {
     appAri?: string;
     appId?: string;
     diagnostics?: (event: DiagnosticEvent) => void;
     scenarios?: LoadedScenario[];
+    enableRealJiraCallbacks?: boolean;
+    jiraFetch?: typeof fetch;
+    fitClaims?: Record<string, unknown>;
   } = {},
 ): Promise<Fixture> {
   const keyPair = await crypto.subtle.generateKey(
@@ -113,6 +119,7 @@ async function createFixture(
   const publicKey = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
   const audience = appId ? `ari:cloud:ecosystem::app/${appId}` : appAri;
   const token = await signedFit(keyPair.privateKey, {
+    ...fitClaims,
     aud: audience,
     exp: Math.floor(Date.now() / 1000) + 60,
     iss: "forge/invocation-token",
@@ -141,7 +148,9 @@ async function createFixture(
     jwksUrl,
     ...(diagnostics ? { diagnostics } : {}),
     ...(scenarios ? { scenarios } : {}),
-  });
+    ...(enableRealJiraCallbacks ? { enableRealJiraCallbacks } : {}),
+    ...(jiraFetch ? { jiraFetch } : {}),
+  } as never);
   assert.equal(appResult.isOk(), true);
   if (appResult.isErr()) return assert.fail(appResult.error.detail);
 
@@ -163,6 +172,7 @@ async function createFixture(
           ...(token ? { authorization: `Bearer ${token}` } : {}),
           "a2a-version": "1.0",
           "content-type": contentType,
+          "x-forge-oauth-user": "validated-user-token",
         },
         body,
       }),
@@ -625,6 +635,99 @@ test("maps simulated callback outcomes and unavailable context to visible task r
     }),
     /active invocation context is unavailable; no Jira action was performed/,
   );
+});
+
+test("runs explicitly enabled Jira callback smoke actions with validated identity", async (t) => {
+  const calls: { body?: unknown; method?: string; url: string }[] = [];
+  const jiraFetch: typeof fetch = async (input, init) => {
+    calls.push({
+      url: String(input),
+      ...(init?.method ? { method: init.method } : {}),
+      ...(init?.body ? { body: JSON.parse(String(init.body)) } : {}),
+    });
+    if (String(input).endsWith("/transitions"))
+      return Response.json({ transitions: [{ id: "31" }] });
+    return new Response(null, { status: 204 });
+  };
+  const scenarios: LoadedScenario[] = [
+    {
+      id: "real-smoke",
+      default: true,
+      match: { contains: [] },
+      steps: [
+        { event: "jira-callback", action: "read", real: true },
+        { event: "jira-callback", action: "comment", real: true },
+        {
+          event: "jira-callback",
+          action: "transition",
+          real: true,
+          transitionId: "31",
+        },
+        { event: "status-update", state: "completed" },
+      ] as LoadedScenario["steps"],
+    },
+  ];
+  const { request, token } = await createFixture(t, {
+    enableRealJiraCallbacks: true,
+    fitClaims: {
+      app: { apiBaseUrl: "https://jira.example.test" },
+      context: { cloudId: "ari:cloud:jira::site/tenant-from-fit" },
+      sub: "user-from-fit",
+    },
+    jiraFetch,
+    scenarios,
+  });
+  const response = await request({
+    token: token(),
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: "real-smoke",
+      method: "SendMessage",
+      params: {
+        message: {
+          contextId: "real-smoke-context",
+          messageId: "real-smoke-message",
+          role: "ROLE_USER",
+          parts: [
+            {
+              data: {
+                invocationContext: {
+                  workItem: { id: "PROJ-42" },
+                  tenantId: "untrusted-tenant",
+                  invokerId: "untrusted-user",
+                },
+              },
+            },
+          ],
+        },
+      },
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(
+    ((await response.json()) as CompletedResponse).result.task.status.state,
+    "TASK_STATE_COMPLETED",
+  );
+  assert.deepEqual(
+    calls.map(({ method, url }) => ({ method, url })),
+    [
+      {
+        method: "GET",
+        url: "https://jira.example.test/rest/api/3/issue/PROJ-42",
+      },
+      {
+        method: "POST",
+        url: "https://jira.example.test/rest/api/3/issue/PROJ-42/comment",
+      },
+      {
+        method: "POST",
+        url: "https://jira.example.test/rest/api/3/issue/PROJ-42/transitions",
+      },
+    ],
+  );
+  assert.match(JSON.stringify(calls[1]?.body), /user-from-fit/);
+  assert.deepEqual(calls[2]?.body, { transition: { id: "31" } });
 });
 
 test("streams coding progress and chunked artifacts in declared order", async (t) => {
