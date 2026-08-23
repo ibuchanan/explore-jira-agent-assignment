@@ -32,7 +32,7 @@ Find this update:
 ```yaml
 - event: status-update
   message: "**Bold text** and *italic text* appear in this update."
-  delayMs: 5000
+  delayMs: 1000
 ```
 
 ## 4. Change the demonstrated text
@@ -42,7 +42,7 @@ Replace `Bold text` with `Strong text`, then save the file:
 ```yaml
 - event: status-update
   message: "**Strong text** and *italic text* appear in this update."
-  delayMs: 5000
+  delayMs: 1000
 ```
 
 ## 5. Run the tests again

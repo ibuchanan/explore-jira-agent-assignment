@@ -15,7 +15,7 @@
     "lint:check": "biome lint",
     "lint:fix": "biome lint --write",
     "start": "npm run build && node dist/index.js",
-    "test": "npm run build:test && node --test dist/test/server.test.js",
+    "test": "npm run build:test && node --test dist/test/*.test.js",
     "typecheck": "tsc --project tsconfig.typecheck.json"
   },
   "dependencies": {

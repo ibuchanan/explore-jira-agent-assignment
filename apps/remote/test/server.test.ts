@@ -3,6 +3,10 @@ import { once } from "node:events";
 import { createServer, type Server } from "node:http";
 import test, { type TestContext } from "node:test";
 
+import type {
+  RemoteLogRecord,
+  RemoteLogRecordLogger,
+} from "@forge-ahead/remote/logging";
 import type { LoadedScenario } from "../src/scenarios.js";
 import { createA2aServer } from "../src/server.js";
 
@@ -94,6 +98,7 @@ async function createFixture(
     scenarios,
     enableRealJiraCallbacks,
     jiraFetch,
+    remoteLogger,
     fitClaims = {},
   }: {
     appAri?: string;
@@ -102,6 +107,7 @@ async function createFixture(
     scenarios?: LoadedScenario[];
     enableRealJiraCallbacks?: boolean;
     jiraFetch?: typeof fetch;
+    remoteLogger?: RemoteLogRecordLogger;
     fitClaims?: Record<string, unknown>;
   } = {},
 ): Promise<Fixture> {
@@ -154,6 +160,7 @@ async function createFixture(
     ...(scenarios ? { scenarios } : {}),
     ...(enableRealJiraCallbacks ? { enableRealJiraCallbacks } : {}),
     ...(jiraFetch ? { jiraFetch } : {}),
+    ...(remoteLogger ? { remoteLogger } : {}),
   } as never);
   assert.equal(appResult.isOk(), true);
   if (appResult.isErr()) return assert.fail(appResult.error.detail);
@@ -243,6 +250,53 @@ test("returns the default scenario task for a verified SendMessage request", asy
   assert.equal(body.result.task.status.message.contextId, "context-456");
   assert.match(body.result.task.status.message.messageId, /^[0-9a-f-]{36}$/i);
   assert.match(body.result.task.status.timestamp, /^\d{4}-\d{2}-\d{2}T/);
+});
+
+test("emits safe structured logs for authenticated completed tasks", async (t) => {
+  const records: RemoteLogRecord[] = [];
+  const remoteLogger: RemoteLogRecordLogger = {
+    debug: (record) => records.push(record),
+    info: (record) => records.push(record),
+    warn: (record) => records.push(record),
+    error: (record) => records.push(record),
+  };
+  const { request, token } = await createFixture(t, { remoteLogger });
+  const response = await request({
+    token: token(),
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: "logging-request",
+      method: "SendMessage",
+      params: {
+        message: {
+          contextId: "logging-context",
+          messageId: "logging-message",
+          role: "ROLE_USER",
+          parts: [{ text: "log this task" }],
+        },
+      },
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  const completed = (await response.json()) as CompletedResponse;
+  const auth = records.find(
+    (record) => record.event === "remote.auth.accepted",
+  );
+  const terminal = records.find(
+    (record) => record.event === "remote.a2a.completed",
+  );
+  assert.deepEqual(auth?.remoteContext.forwardedTokens, {
+    hasSystemToken: false,
+    hasUserToken: true,
+  });
+  assert.doesNotMatch(JSON.stringify(auth), /validated-user-token/);
+  assert.deepEqual(terminal?.a2a, {
+    contextId: "logging-context",
+    final: true,
+    state: "TASK_STATE_COMPLETED",
+    taskId: completed.result.task.id,
+  });
 });
 
 test("runs the default scenario for an unmatched SendMessage", async (t) => {
@@ -740,6 +794,70 @@ test("runs explicitly enabled Jira callback smoke actions with validated identit
   );
   assert.match(JSON.stringify(calls[1]?.body), /user-from-fit/);
   assert.deepEqual(calls[2]?.body, { transition: { id: "31" } });
+});
+
+test("emits a terminal log when a Jira callback rejects a task", async (t) => {
+  const records: RemoteLogRecord[] = [];
+  const scenarios: LoadedScenario[] = [
+    {
+      id: "callback-rejected",
+      default: true,
+      match: { contains: [] },
+      steps: [
+        { event: "status-update", state: "working" },
+        { event: "jira-callback", action: "transition", result: "rejected" },
+      ],
+    },
+  ];
+  const { request, token } = await createFixture(t, {
+    remoteLogger: {
+      debug: (record) => records.push(record),
+      info: (record) => records.push(record),
+      warn: (record) => records.push(record),
+      error: (record) => records.push(record),
+    },
+    scenarios,
+  });
+  const response = await request({
+    token: token(),
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: "callback-rejected",
+      method: "SendMessage",
+      params: {
+        message: {
+          contextId: "callback-rejected-context",
+          messageId: "callback-rejected-message",
+          role: "ROLE_USER",
+          parts: [
+            {
+              data: {
+                invocationContext: {
+                  workItem: { id: "PROJ-42" },
+                  tenantId: "tenant-1",
+                  invokerId: "user-1",
+                },
+              },
+            },
+          ],
+        },
+      },
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(
+    ((await response.json()) as CompletedResponse).result.task.status.state,
+    "TASK_STATE_REJECTED",
+  );
+  assert.ok(
+    records.some(
+      (record) =>
+        record.event === "remote.a2a.completed" &&
+        record.a2a.state === "TASK_STATE_REJECTED" &&
+        record.a2a.contextId === "callback-rejected-context",
+    ),
+  );
 });
 
 test("streams coding progress and chunked artifacts in declared order", async (t) => {

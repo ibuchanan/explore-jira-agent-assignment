@@ -15,7 +15,7 @@ steps:
     message: "**Starting the repository migration.**"
   - event: status-update
     message: "**Scanning repository files for legacy references.**"
-    delayMs: 5000
+    delayMs: 1000
   - event: artifact-update
     artifact:
       artifactId: migration-progress-1
@@ -26,12 +26,12 @@ steps:
       parts:
         - kind: text
           text: "Migrated 12 of 340 files."
-    delayMs: 5000
+    delayMs: 1000
   - event: status-update
     message: "**Continuing the migration across the remaining files.**"
-    delayMs: 5000
+    delayMs: 1000
   - event: status-update
     state: completed
     message: "**Completed the repository migration.**"
     final: true
-    delayMs: 5000
+    delayMs: 1000

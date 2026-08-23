@@ -15,10 +15,10 @@ steps:
     message: "**Starting work on the archived-reports repository fix.**"
   - event: status-update
     message: "**Applying the fix and preparing to push the change.**"
-    delayMs: 5000
+    delayMs: 1000
   - event: status-update
     message: "**Tool: pushing the commit to the archived-reports repository.**"
-    delayMs: 5000
+    delayMs: 1000
   - event: artifact-update
     artifact:
       artifactId: unapplied-patch-1
@@ -29,9 +29,9 @@ steps:
       parts:
         - kind: text
           text: "--- a/reports.ts\n+++ b/reports.ts\n@@ fix applied locally but not pushed"
-    delayMs: 5000
+    delayMs: 1000
   - event: status-update
     state: failed
     message: "**Repository access was revoked after the task began and could not be recovered, so the fix could not be pushed.**"
     final: true
-    delayMs: 5000
+    delayMs: 1000

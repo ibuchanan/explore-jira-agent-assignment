@@ -11,13 +11,13 @@ steps:
     message: "## Starting login-bug fix\n\nI’m tracing the session lifecycle and will report each milestone."
   - event: status-update
     message: "### Investigation\n\n- Located the login/session code path\n- Comparing **refresh** and **validation** order"
-    delayMs: 5000
+    delayMs: 1000
   - event: status-update
     message: "> **Internal thinking**\n> Validation currently runs before token refresh. Reversing that order should preserve valid renewed sessions."
-    delayMs: 5000
+    delayMs: 1000
   - event: status-update
     message: "### Change plan\n\n1. Refresh the session token\n2. Validate the refreshed session\n3. Keep the existing failure handling"
-    delayMs: 5000
+    delayMs: 1000
   - event: artifact-update
     artifact:
       artifactId: patch-1
@@ -28,7 +28,7 @@ steps:
       parts:
         - kind: text
           text: "```diff\n--- a/session.ts\n+++ b/session.ts\n@@ refresh before validate\n+await refreshToken(session);\n validateSession(session);\n```"
-    delayMs: 5000
+    delayMs: 1000
   - event: artifact-update
     artifact:
       artifactId: patch-1
@@ -37,13 +37,13 @@ steps:
           text: "\n```diff\n@@ trailing whitespace cleanup\n-const valid = validateSession(session);  \n+const valid = validateSession(session);\n```"
     append: true
     lastChunk: true
-    delayMs: 5000
+    delayMs: 1000
   - event: status-update
     message: "### Verification\n\n\U0001F9EA **Running** the checkout test suite against the proposed change."
-    delayMs: 5000
+    delayMs: 1000
   - event: status-update
     message: "✅ **42 tests passed**\n\nThe checkout flow remains green after the session-order change."
-    delayMs: 5000
+    delayMs: 1000
   - event: artifact-update
     artifact:
       artifactId: implementation-summary-1
@@ -54,9 +54,9 @@ steps:
       parts:
         - kind: text
           text: "## Implementation summary\n\n- Refreshes the token **before** validation\n- Preserves existing validation behavior\n- Verified by the checkout test suite"
-    delayMs: 5000
+    delayMs: 1000
   - event: status-update
     state: completed
     message: "## ✅ Login bug fixed\n\nSession tokens now refresh before validation; the checkout suite passed."
     final: true
-    delayMs: 5000
+    delayMs: 1000

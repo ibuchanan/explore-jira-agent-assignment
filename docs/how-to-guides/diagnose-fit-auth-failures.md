@@ -43,6 +43,12 @@ When `invocation token validated` appears, FIT authentication succeeded. Any
 following error is in JSON-RPC routing, scenario playback, or agent behavior,
 not token validation.
 
+If Jira reports an HTTP 500 while the remote continues to log scenario events,
+compare the request duration with the caller's invocation deadline. A
+non-streaming `message/send` response is not complete until scenario playback
+finishes; shorten simulated delays or move long-running work to a protocol
+flow that does not hold that request open.
+
 Use the local remote tests for request-shape and scenario behavior:
 
 ```bash
