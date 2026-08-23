@@ -163,7 +163,16 @@ test("returns a configuration error instead of throwing", () => {
   assert.equal(result.error.detail, "FORGE_APP_ID is required");
 });
 
-test("returns a completed deterministic task for a verified SendMessage request", async (t) => {
+test("rejects a scenario collection without a default before accepting tasks", () => {
+  const result = createA2aServer({ appId: "test", scenarios: [] });
+
+  assert.equal(result.isErr(), true);
+  if (result.isOk()) return assert.fail("expected a configuration error");
+  assert.equal(result.error.status, 400);
+  assert.match(result.error.detail ?? "", /exactly one Default Scenario/);
+});
+
+test("returns the default scenario task for a verified SendMessage request", async (t) => {
   const { request, token } = await createFixture(t, { appId: "test" });
   const response = await request({
     token: token(),
@@ -194,17 +203,71 @@ test("returns a completed deterministic task for a verified SendMessage request"
   assert.match(body.result.task.id, /^[0-9a-f-]{36}$/i);
   assert.equal(body.result.task.status.state, "TASK_STATE_COMPLETED");
   assert.deepEqual(body.result.task.status.message.parts, [
-    {
-      mediaType: "text/markdown",
-      metadata: {},
-      text: `# Agent Simulator\n\n**Markdown is enabled.**\n\n- A list item\n- \`inline code\`\n\n<details>\n<summary>More details</summary>\n\nThis is collapsed supplemental content.\n</details>`,
-    },
+    { mediaType: "text/plain", metadata: {}, text: "Finished the task." },
   ]);
   assert.equal(body.result.task.status.message.role, "ROLE_AGENT");
   assert.equal(body.result.task.status.message.taskId, body.result.task.id);
   assert.equal(body.result.task.status.message.contextId, "context-456");
   assert.match(body.result.task.status.message.messageId, /^[0-9a-f-]{36}$/i);
   assert.match(body.result.task.status.timestamp, /^\d{4}-\d{2}-\d{2}T/);
+});
+
+test("runs the default scenario for an unmatched SendMessage", async (t) => {
+  const { request, token } = await createFixture(t);
+  const response = await request({
+    token: token(),
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: "default-scenario",
+      method: "SendMessage",
+      params: {
+        message: {
+          contextId: "default-context",
+          messageId: "default-message",
+          role: "ROLE_USER",
+          parts: [{ text: "A task without a matching scenario" }],
+        },
+      },
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  const body = (await response.json()) as CompletedResponse;
+  assert.equal(body.result.task.status.state, "TASK_STATE_COMPLETED");
+  assert.deepEqual(body.result.task.status.message.parts, [
+    { mediaType: "text/plain", metadata: {}, text: "Finished the task." },
+  ]);
+});
+
+test("selects the first case-insensitive matching scenario", async (t) => {
+  const { request, token } = await createFixture(t);
+  const response = await request({
+    token: token(),
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: "matched-scenario",
+      method: "SendMessage",
+      params: {
+        message: {
+          contextId: "match-context",
+          messageId: "match-message",
+          role: "ROLE_USER",
+          parts: [{ text: "Please FIX THE LOGIN BUG today" }],
+        },
+      },
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  const body = (await response.json()) as CompletedResponse;
+  assert.equal(body.result.task.status.state, "TASK_STATE_COMPLETED");
+  assert.deepEqual(body.result.task.status.message.parts, [
+    {
+      mediaType: "text/plain",
+      metadata: {},
+      text: "Fixed the login bug and verified tests pass.",
+    },
+  ]);
 });
 
 test("returns a JSON-RPC error for a SendMessage request without a message", async (t) => {

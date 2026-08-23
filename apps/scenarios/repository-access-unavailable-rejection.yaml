@@ -1,0 +1,14 @@
+# Demonstrates a Simulation Scenario that cannot start normally: the target
+# repository no longer exists, so access can never be granted and the task
+# is refused before execution begins.
+# @see specs/tickets/10-terminal-outcome-semantics.md
+# @see docs/adr/0012-rejected-is-pre-execution-refusal.md
+id: repository-access-unavailable-rejection
+match:
+  contains:
+    - "update the deleted legacy-reports repository"
+steps:
+  - event: status-update
+    state: rejected
+    message: "This request cannot be accepted: the target repository no longer exists and no recoverable access path is available."
+    final: true

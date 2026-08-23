@@ -1,0 +1,36 @@
+# Simulated Coding Remote Agent: a single, clearly labeled Input Need
+# pause (`input-required`) for an ambiguous acceptance-criteria detail,
+# then resumption to `working` once the user supplies the missing detail.
+# @see specs/tickets/07-input-required-clarification-resumption.md
+# @see docs/adr/0014-input-required-is-for-work-clarification.md
+# @see docs/adr/0031-input-needs-are-clearly-labeled.md
+# @see docs/adr/0015-interrupted-tasks-resume-same-task.md
+# @see docs/adr/0017-resumption-emits-working-before-content.md
+id: input-required-clarification-resumption
+match:
+  contains:
+    - "clarify the acceptance criteria for the checkout redesign"
+steps:
+  - event: status-update
+    state: working
+    message: "Starting work on the checkout redesign."
+  - event: status-update
+    message: "Reviewing the work item for acceptance criteria."
+    delayMs: 20
+  - event: status-update
+    state: input-required
+    message: "Input required: the work item doesn't say whether guest checkout must be supported. Please clarify the acceptance criteria before I continue."
+    waitForUserInput: true
+    delayMs: 20
+  - event: status-update
+    state: working
+    message: "Thanks, resuming work now that the acceptance criteria are clarified."
+    delayMs: 20
+  - event: status-update
+    message: "Updating the checkout flow to match the clarified acceptance criteria."
+    delayMs: 20
+  - event: status-update
+    state: completed
+    message: "Updated the checkout flow to match the clarified acceptance criteria."
+    final: true
+    delayMs: 20

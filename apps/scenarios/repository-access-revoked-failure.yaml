@@ -1,0 +1,37 @@
+# Simulated Coding Remote Agent: repository access is revoked after the
+# task has already been accepted and started, and cannot be recovered
+# through authorization. Ends in `failed` with a diagnostic Artifact
+# preserving the unpushed fix for manual application.
+# @see specs/tickets/10-terminal-outcome-semantics.md
+# @see docs/adr/0011-failure-details-use-artifacts-only-when-reviewable.md
+# @see docs/adr/0012-rejected-is-pre-execution-refusal.md
+id: repository-access-revoked-failure
+match:
+  contains:
+    - "push the fix to the archived-reports repository"
+steps:
+  - event: status-update
+    state: working
+    message: "Starting work on the archived-reports repository fix."
+  - event: status-update
+    message: "Applying the fix and preparing to push the change."
+    delayMs: 20
+  - event: status-update
+    message: "Tool: pushing the commit to the archived-reports repository."
+    delayMs: 20
+  - event: artifact-update
+    artifact:
+      artifactId: unapplied-patch-1
+      name: "unpushed-fix.patch"
+      description: "The fix could not be pushed because repository access was revoked mid-task; preserved here for manual application."
+      metadata:
+        kind: patch
+      parts:
+        - kind: text
+          text: "--- a/reports.ts\n+++ b/reports.ts\n@@ fix applied locally but not pushed"
+    delayMs: 20
+  - event: status-update
+    state: failed
+    message: "Repository access was revoked after the task began and could not be recovered, so the fix could not be pushed."
+    final: true
+    delayMs: 20

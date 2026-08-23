@@ -1,0 +1,18 @@
+# Default Scenario: runs when no other scenario's `match.contains` phrases
+# are found in the starting task text. Kept as a small, generic happy path;
+# richer Simulated Coding Remote Agent scenarios live in their own files.
+# @see docs/adr/0033-simulated-agent-uses-editable-scenarios.md
+id: default-happy-path
+default: true
+steps:
+  - event: status-update
+    state: working
+    message: "Starting work on this task."
+  - event: status-update
+    message: "Looking into the details..."
+    delayMs: 20
+  - event: status-update
+    state: completed
+    message: "Finished the task."
+    final: true
+    delayMs: 20

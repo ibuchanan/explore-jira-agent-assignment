@@ -1,0 +1,37 @@
+# Simulated Coding Remote Agent: a task that is actively working and has
+# already produced an artifact when cancellation is requested. The scenario
+# itself does not model cancellation - the A2A Simulator's tasks/cancel
+# handling coordinates the runtime stop and ends the stream before this
+# scenario would otherwise reach its own `completed` step.
+# @see specs/tickets/11-cancellation-ordering.md
+# @see docs/adr/0019-canceled-is-emitted-after-runtime-stop.md
+id: cancellation-during-work
+match:
+  contains:
+    - "long-running repository migration"
+steps:
+  - event: status-update
+    state: working
+    message: "Starting the repository migration."
+  - event: status-update
+    message: "Scanning repository files for legacy references."
+    delayMs: 100
+  - event: artifact-update
+    artifact:
+      artifactId: migration-progress-1
+      name: "migration-progress.log"
+      description: "Files migrated so far, before cancellation."
+      metadata:
+        kind: implementation-summary
+      parts:
+        - kind: text
+          text: "Migrated 12 of 340 files."
+    delayMs: 100
+  - event: status-update
+    message: "Continuing the migration across the remaining files."
+    delayMs: 100
+  - event: status-update
+    state: completed
+    message: "Completed the repository migration."
+    final: true
+    delayMs: 100
