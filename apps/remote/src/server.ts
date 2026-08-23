@@ -1,9 +1,4 @@
-import {
-  createPublicKey,
-  randomUUID,
-  verify,
-  type JsonWebKey,
-} from "node:crypto";
+import { validateAuthHeader } from "@forge-ahead/remote";
 import { createServer, type IncomingMessage, type Server } from "node:http";
 
 const DEFAULT_JWKS_URL =
@@ -11,8 +6,6 @@ const DEFAULT_JWKS_URL =
 
 type JsonRpcId = string | number;
 type RecordValue = Record<string, unknown>;
-type JwtHeader = { alg?: unknown; kid?: unknown };
-type FitClaims = { aud?: unknown; exp?: unknown; iss?: unknown };
 type JsonRpcRequest = {
   id?: unknown;
   jsonrpc?: unknown;
@@ -21,7 +14,6 @@ type JsonRpcRequest = {
 };
 type JsonRpcParameters = { message?: unknown };
 type A2aMessage = { contextId?: unknown };
-type StatusError = { statusCode?: unknown };
 
 type ServerOptions = {
   appAri?: string;
@@ -49,82 +41,6 @@ function protocolError(
   message: string,
 ) {
   json(response, 400, { jsonrpc: "2.0", id, error: { code, message } });
-}
-
-function decode(segment: string): unknown {
-  return JSON.parse(Buffer.from(segment, "base64url").toString("utf8"));
-}
-
-async function verifyFit(
-  token: string,
-  { appAri, jwksUrl }: Required<Pick<ServerOptions, "appAri" | "jwksUrl">>,
-) {
-  const [encodedHeader, encodedPayload, encodedSignature, ...extra] =
-    token.split(".");
-  if (extra.length || !encodedHeader || !encodedPayload || !encodedSignature) {
-    throw new Error("FIT must be a three-part JWT");
-  }
-
-  const headerValue = decode(encodedHeader);
-  if (!isRecord(headerValue)) {
-    throw new Error("FIT header must be an object");
-  }
-  const header = headerValue as JwtHeader;
-  if (header.alg !== "ES256" && header.alg !== "RS256") {
-    throw new Error(
-      `unsupported FIT signing algorithm: ${header.alg != null ? String(header.alg) : "missing"}`,
-    );
-  }
-  if (typeof header.kid !== "string") {
-    throw new Error("FIT is missing a signing key ID");
-  }
-
-  const jwks = (await (await fetch(jwksUrl)).json()) as {
-    keys?: Array<JsonWebKey & { kid?: unknown }>;
-  };
-  const jwk = jwks.keys?.find(
-    (key) =>
-      key.kid === header.kid &&
-      (header.alg === "ES256"
-        ? key.kty === "EC" && key.crv === "P-256"
-        : key.kty === "RSA"),
-  );
-  if (!jwk) throw new Error("unknown signing key");
-
-  const signedContent = Buffer.from(`${encodedHeader}.${encodedPayload}`);
-  const publicKey = createPublicKey({ key: jwk as JsonWebKey, format: "jwk" });
-  const signature = Buffer.from(encodedSignature, "base64url");
-  const validSignature =
-    header.alg === "ES256"
-      ? verify(
-          "sha256",
-          signedContent,
-          { key: publicKey, dsaEncoding: "ieee-p1363" },
-          signature,
-        )
-      : verify("RSA-SHA256", signedContent, publicKey, signature);
-  if (!validSignature) throw new Error("invalid signature");
-
-  const claimsValue = decode(encodedPayload);
-  if (!isRecord(claimsValue)) {
-    throw new Error("FIT claims must be an object");
-  }
-  const claims = claimsValue as FitClaims;
-  if (
-    claims.iss !== "forge/invocation-token" ||
-    !(
-      claims.aud === appAri ||
-      (Array.isArray(claims.aud) && claims.aud.includes(appAri))
-    )
-  ) {
-    const error = Object.assign(new Error("forbidden token"), {
-      statusCode: 403,
-    });
-    throw error;
-  }
-  if (typeof claims.exp !== "number" || claims.exp <= Date.now() / 1000) {
-    throw new Error("expired token");
-  }
 }
 
 function readBody(request: IncomingMessage): Promise<string> {
@@ -165,21 +81,14 @@ export function createA2aServer({
       response.writeHead(401).end();
       return;
     }
-    try {
-      await verifyFit(authorization.slice("Bearer ".length), {
-        appAri,
-        jwksUrl,
-      });
-    } catch (error) {
-      console.warn(
-        `A2A FIT rejected: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      const statusCode = isRecord(error)
-        ? (error as StatusError).statusCode
-        : undefined;
-      response
-        .writeHead(typeof statusCode === "number" ? statusCode : 401)
-        .end();
+    const fit = await validateAuthHeader({
+      authorization,
+      audience: appAri,
+      jwksUrl,
+    });
+    if (fit.isErr()) {
+      console.warn(`A2A FIT rejected: ${fit.error.title}`);
+      response.writeHead(fit.error.status ?? 401).end();
       return;
     }
 
@@ -232,12 +141,12 @@ export function createA2aServer({
     }
     const message = params.message as A2aMessage;
 
-    const taskId = randomUUID();
+    const taskId = crypto.randomUUID();
     const requestedContextId = message.contextId;
     const contextId =
       typeof requestedContextId === "string" && requestedContextId.trim()
         ? requestedContextId
-        : randomUUID();
+        : crypto.randomUUID();
     console.info("A2A SendMessage completed");
     json(response, 200, {
       jsonrpc: "2.0",
@@ -251,7 +160,7 @@ export function createA2aServer({
             message: {
               role: "ROLE_AGENT",
               parts: [{ text: "Minimal connector is working." }],
-              messageId: randomUUID(),
+              messageId: crypto.randomUUID(),
               taskId,
               contextId,
             },
