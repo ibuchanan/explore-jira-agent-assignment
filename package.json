@@ -5,7 +5,8 @@
   "description": "a sample app that defines a rovo agent connector powering integration to remote AI agents",
   "license": "Apache-2.0",
   "workspaces": [
-    "apps/*"
+    "apps/forge",
+    "apps/remote"
   ],
   "scripts": {
     "build": "npm run --workspaces --if-present build",

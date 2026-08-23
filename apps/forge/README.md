@@ -40,3 +40,14 @@ Remote backend service
 ```
 
 The main source of truth for Forge wiring is [`manifest.yml`](manifest.yml).
+
+## A2A transport selection
+
+Jira uses polling by default: it sends `SendMessage` and reads progress with
+`GetTask`. Set `protocols.agent2Agent.jsonRpcTransport.streaming: true` in the
+manifest to opt this connector into SSE; Jira then uses `SendStreamingMessage`.
+
+That manifest setting selects Jira's transport. It is separate from the remote
+Agent Card's `capabilities.streaming`, which reports whether the backend can
+serve SSE for A2A clients. The simulator supports both transports, so its Agent
+Card can advertise streaming while this connector remains on polling.

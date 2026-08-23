@@ -1262,6 +1262,92 @@ test("pauses before work for initial clarification and authorization", async (t)
   }
 });
 
+test("reports delayed scenario progress through GetTask polling", async (t) => {
+  const scenarios: LoadedScenario[] = [
+    {
+      id: "polling-progress",
+      default: true,
+      match: { contains: [] },
+      steps: [
+        {
+          event: "status-update",
+          state: "working",
+          message: "Started polling scenario.",
+        },
+        {
+          event: "status-update",
+          message: "Reached the delayed update.",
+          delayMs: 100,
+        },
+        {
+          event: "status-update",
+          state: "completed",
+          message: "Finished polling scenario.",
+          delayMs: 100,
+        },
+      ],
+    },
+  ];
+  const { request, token } = await createFixture(t, { scenarios });
+  const send = await request({
+    token: token(),
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: "polling-start",
+      method: "SendMessage",
+      params: {
+        configuration: { returnImmediately: true },
+        message: {
+          contextId: "polling-context",
+          messageId: "polling-message",
+          role: "ROLE_USER",
+          parts: [{ text: "Run the polling scenario." }],
+        },
+      },
+    }),
+  });
+
+  assert.equal(send.status, 200);
+  const started = (await send.json()) as CompletedResponse;
+  assert.equal(started.result.task.status.state, "TASK_STATE_WORKING");
+  assert.match(
+    JSON.stringify(started.result.task.status.message.parts),
+    /Started polling scenario/,
+  );
+
+  const task = async () => {
+    const response = await request({
+      token: token(),
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: "polling-get-task",
+        method: "GetTask",
+        params: { id: started.result.task.id },
+      }),
+    });
+    assert.equal(response.status, 200);
+    return (await response.json()) as {
+      result: CompletedResponse["result"]["task"];
+    };
+  };
+
+  await new Promise((resolve) => setTimeout(resolve, 130));
+  const progressed = await task();
+  assert.equal(progressed.result.status.state, "TASK_STATE_WORKING");
+  assert.match(
+    JSON.stringify(progressed.result.status.message.parts),
+    /Reached the delayed update/,
+  );
+
+  await new Promise((resolve) => setTimeout(resolve, 130));
+  const completed = await task();
+  assert.equal(completed.result.status.state, "TASK_STATE_COMPLETED");
+  assert.match(
+    JSON.stringify(completed.result.status.message.parts),
+    /Finished polling scenario/,
+  );
+});
+
 test("cancels delayed work after retaining its earlier artifact", async (t) => {
   const { request, token } = await createFixture(t);
   const started = await request({

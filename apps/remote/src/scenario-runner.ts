@@ -28,6 +28,11 @@ type JiraCallbackCredentials = {
   userToken: string;
 };
 
+type StepResult =
+  | { kind: "continue" }
+  | { kind: "paused" }
+  | { kind: "terminal"; state: TaskState };
+
 type ScenarioSession = {
   canceled: boolean;
   contextId: string;
@@ -240,6 +245,164 @@ export function createScenarioRunner({
         AgentEvent.statusUpdate({ taskId, contextId, status, metadata: {} }),
       );
   };
+  const playStep = async ({
+    contextId,
+    eventBus,
+    index,
+    invocationContext,
+    session,
+    step,
+    task,
+    trustedCredentials,
+  }: {
+    contextId: string;
+    eventBus: { publish(event: unknown): void };
+    index: number;
+    invocationContext: ReturnType<typeof invocationContextFromParts>;
+    session: ScenarioSession;
+    step: LoadedScenario["steps"][number];
+    task: unknown;
+    trustedCredentials: JiraCallbackCredentials | undefined;
+  }): Promise<StepResult> => {
+    if (step.event === "artifact-update" && step.artifact) {
+      eventBus.publish(
+        AgentEvent.artifactUpdate({
+          taskId: session.taskId,
+          contextId,
+          artifact: artifact(step.artifact),
+          append: step.append === true,
+          lastChunk: step.lastChunk === true,
+          metadata: {},
+        }),
+      );
+      return { kind: "continue" };
+    }
+    if (step.event === "jira-callback" && step.action) {
+      const unavailable =
+        invocationContext.workItem.availability !== "available" ||
+        !session.tenantId ||
+        !session.invokerId;
+      const credentials =
+        enableRealJiraCallbacks && step.real === true && trustedCredentials;
+      const result = unavailable
+        ? "context-unavailable"
+        : credentials
+          ? await runJiraCallback(
+              step,
+              invocationContext.workItem.id ?? "",
+              credentials,
+              jiraFetch,
+              session.status?.state === TaskState.TASK_STATE_WORKING,
+            ).catch(() =>
+              session.status?.state === TaskState.TASK_STATE_WORKING
+                ? "failed"
+                : "rejected",
+            )
+          : (step.result ?? "simulated");
+      const state =
+        result === "auth-required"
+          ? TaskState.TASK_STATE_AUTH_REQUIRED
+          : result === "rejected"
+            ? TaskState.TASK_STATE_REJECTED
+            : result === "failed"
+              ? TaskState.TASK_STATE_FAILED
+              : (session.status?.state ?? TaskState.TASK_STATE_WORKING);
+      const status = {
+        state,
+        message: agentMessage(
+          session.taskId,
+          contextId,
+          step.message ??
+            (result === "context-unavailable"
+              ? "Simulated Jira callback skipped because the active invocation context is unavailable; no Jira action was performed."
+              : `Simulated Jira ${step.action} callback (${result}); no Jira action was performed.`),
+        ),
+        timestamp: new Date().toISOString(),
+      };
+      session.status = status;
+      diagnostics({
+        event: "jira-callback",
+        taskId: session.taskId,
+        contextId: session.contextId,
+        sessionId: session.sessionId,
+        tenantId: session.tenantId,
+        invokerId: session.invokerId,
+        ...(invocationContext.workItem.id
+          ? { workItemId: invocationContext.workItem.id }
+          : {}),
+        scenarioId: session.scenario.id,
+        action: step.action,
+        result,
+      });
+      publishStatus(eventBus, session.taskId, contextId, task, index, status);
+      if (result === "auth-required") return { kind: "paused" };
+      if (result === "rejected" || result === "failed")
+        return { kind: "terminal", state };
+      return { kind: "continue" };
+    }
+    if (step.event !== "status-update") {
+      diagnostics({
+        event: "compliance-warning",
+        taskId: session.taskId,
+        contextId: session.contextId,
+        sessionId: session.sessionId,
+        tenantId: session.tenantId,
+        scenarioId: session.scenario.id,
+        warning: "unsupported-scenario-event",
+      });
+      return { kind: "continue" };
+    }
+    const state = step.state ? taskStates[step.state] : session.status?.state;
+    if (!state) {
+      diagnostics({
+        event: "compliance-warning",
+        taskId: session.taskId,
+        contextId: session.contextId,
+        sessionId: session.sessionId,
+        tenantId: session.tenantId,
+        scenarioId: session.scenario.id,
+        warning: "unsupported-task-state",
+      });
+      return { kind: "continue" };
+    }
+    const status = {
+      state,
+      message: agentMessage(session.taskId, contextId, step.message),
+      timestamp: new Date().toISOString(),
+    };
+    session.status = status;
+    diagnostics({
+      event: "lifecycle",
+      taskId: session.taskId,
+      contextId: session.contextId,
+      sessionId: session.sessionId,
+      tenantId: session.tenantId,
+      scenarioId: session.scenario.id,
+      state: step.state ?? "unknown",
+    });
+    publishStatus(eventBus, session.taskId, contextId, task, index, status);
+    if (step.waitForUserInput) {
+      diagnostics({
+        event: "paused",
+        taskId: session.taskId,
+        contextId: session.contextId,
+        sessionId: session.sessionId,
+        tenantId: session.tenantId,
+        scenarioId: session.scenario.id,
+        state: step.state ?? "unknown",
+      });
+      return { kind: "paused" };
+    }
+    return [
+      TaskState.TASK_STATE_COMPLETED,
+      TaskState.TASK_STATE_REJECTED,
+      TaskState.TASK_STATE_FAILED,
+      TaskState.TASK_STATE_CANCELED,
+    ].includes(state)
+      ? { kind: "terminal", state }
+      : { kind: "continue" };
+  };
+
   return {
     async execute(requestContext, eventBus) {
       const { taskId, contextId, task, userMessage } = requestContext;
@@ -291,152 +454,21 @@ export function createScenarioRunner({
         if (step.delayMs) await delay(step.delayMs);
         if (session.canceled) return;
         session.nextStep = index + 1;
-        if (step.event === "artifact-update" && step.artifact) {
-          eventBus.publish(
-            AgentEvent.artifactUpdate({
-              taskId,
-              contextId,
-              artifact: artifact(step.artifact),
-              append: step.append === true,
-              lastChunk: step.lastChunk === true,
-              metadata: {},
-            }),
-          );
-          continue;
-        }
-        if (step.event === "jira-callback" && step.action) {
-          const unavailable =
-            invocationContext.workItem.availability !== "available" ||
-            !session.tenantId ||
-            !session.invokerId;
-          const credentials =
-            enableRealJiraCallbacks && step.real === true && trustedCredentials;
-          const result = unavailable
-            ? "context-unavailable"
-            : credentials
-              ? await runJiraCallback(
-                  step,
-                  invocationContext.workItem.id ?? "",
-                  credentials,
-                  jiraFetch,
-                  session.status?.state === TaskState.TASK_STATE_WORKING,
-                ).catch(() =>
-                  session.status?.state === TaskState.TASK_STATE_WORKING
-                    ? "failed"
-                    : "rejected",
-                )
-              : (step.result ?? "simulated");
-          const state =
-            result === "auth-required"
-              ? TaskState.TASK_STATE_AUTH_REQUIRED
-              : result === "rejected"
-                ? TaskState.TASK_STATE_REJECTED
-                : result === "failed"
-                  ? TaskState.TASK_STATE_FAILED
-                  : (session.status?.state ?? TaskState.TASK_STATE_WORKING);
-          const status = {
-            state,
-            message: agentMessage(
-              taskId,
-              contextId,
-              step.message ??
-                (result === "context-unavailable"
-                  ? "Simulated Jira callback skipped because the active invocation context is unavailable; no Jira action was performed."
-                  : `Simulated Jira ${step.action} callback (${result}); no Jira action was performed.`),
-            ),
-            timestamp: new Date().toISOString(),
-          };
-          session.status = status;
-          diagnostics({
-            event: "jira-callback",
-            taskId: session.taskId,
-            contextId: session.contextId,
-            sessionId: session.sessionId,
-            tenantId: session.tenantId,
-            invokerId: session.invokerId,
-            ...(invocationContext.workItem.id
-              ? { workItemId: invocationContext.workItem.id }
-              : {}),
-            scenarioId: scenario.id,
-            action: step.action,
-            result,
-          });
-          publishStatus(eventBus, taskId, contextId, task, index, status);
-          if (result === "auth-required") return;
-          if (result === "rejected" || result === "failed") {
-            terminal(remoteLogger, taskId, contextId, state);
-            sessions.delete(taskId);
-            return;
-          }
-          continue;
-        }
-        if (step.event !== "status-update") {
-          diagnostics({
-            event: "compliance-warning",
-            taskId: session.taskId,
-            contextId: session.contextId,
-            sessionId: session.sessionId,
-            tenantId: session.tenantId,
-            scenarioId: scenario.id,
-            warning: "unsupported-scenario-event",
-          });
-          continue;
-        }
-        const state = step.state
-          ? taskStates[step.state]
-          : session.status?.state;
-        if (!state) {
-          diagnostics({
-            event: "compliance-warning",
-            taskId: session.taskId,
-            contextId: session.contextId,
-            sessionId: session.sessionId,
-            tenantId: session.tenantId,
-            scenarioId: scenario.id,
-            warning: "unsupported-task-state",
-          });
-          continue;
-        }
-        const status = {
-          state,
-          message: agentMessage(taskId, contextId, step.message),
-          timestamp: new Date().toISOString(),
-        };
-        session.status = status;
-        diagnostics({
-          event: "lifecycle",
-          taskId: session.taskId,
-          contextId: session.contextId,
-          sessionId: session.sessionId,
-          tenantId: session.tenantId,
-          scenarioId: scenario.id,
-          state: step.state ?? "unknown",
+        const result = await playStep({
+          contextId,
+          eventBus,
+          index,
+          invocationContext,
+          session,
+          step,
+          task,
+          trustedCredentials,
         });
-        publishStatus(eventBus, taskId, contextId, task, index, status);
-        if (step.waitForUserInput) {
-          diagnostics({
-            event: "paused",
-            taskId: session.taskId,
-            contextId: session.contextId,
-            sessionId: session.sessionId,
-            tenantId: session.tenantId,
-            scenarioId: scenario.id,
-            state: step.state ?? "unknown",
-          });
-          return;
-        }
-        if (
-          [
-            TaskState.TASK_STATE_COMPLETED,
-            TaskState.TASK_STATE_REJECTED,
-            TaskState.TASK_STATE_FAILED,
-            TaskState.TASK_STATE_CANCELED,
-          ].includes(state)
-        ) {
-          terminal(remoteLogger, taskId, contextId, state);
-          sessions.delete(taskId);
-          return;
-        }
+        if (result.kind === "continue") continue;
+        if (result.kind === "paused") return;
+        terminal(remoteLogger, taskId, contextId, result.state);
+        sessions.delete(taskId);
+        return;
       }
     },
     async cancelTask(taskId, eventBus) {

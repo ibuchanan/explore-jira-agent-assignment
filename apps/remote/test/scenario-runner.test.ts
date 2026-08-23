@@ -11,6 +11,47 @@ function stateFromEvent(event: unknown): TaskState | undefined {
     ?.state;
 }
 
+test("starts a new session after a terminal transition", async () => {
+  const events: unknown[] = [];
+  const diagnostics: Record<string, unknown>[] = [];
+  const runner = createScenarioRunner({
+    diagnostics: (event) => diagnostics.push(event),
+    scenarios: [
+      {
+        id: "terminal",
+        default: true,
+        match: { contains: [] },
+        steps: [
+          { event: "status-update", state: "working" },
+          { event: "status-update", state: "completed" },
+        ],
+      },
+    ],
+  });
+  const eventBus = { publish: (event: unknown) => events.push(event) };
+  const requestContext = {
+    context: {},
+    contextId: "context-1",
+    taskId: "task-1",
+    userMessage: { parts: [] },
+  };
+
+  await runner.execute(requestContext as never, eventBus as never);
+  await runner.execute(requestContext as never, eventBus as never);
+
+  assert.deepEqual(events.map(stateFromEvent), [
+    TaskState.TASK_STATE_WORKING,
+    TaskState.TASK_STATE_COMPLETED,
+    TaskState.TASK_STATE_WORKING,
+    TaskState.TASK_STATE_COMPLETED,
+  ]);
+  const sessions = diagnostics
+    .filter((event) => event.event === "scenario-selected")
+    .map((event) => event.sessionId);
+  assert.equal(sessions.length, 2);
+  assert.notEqual(sessions[0], sessions[1]);
+});
+
 test("resumes a paused scenario with working before completion", async () => {
   const events: unknown[] = [];
   const scenarios: LoadedScenario[] = [

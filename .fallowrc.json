@@ -14,12 +14,8 @@
   // GitHub dependencies, so exported symbols that are unused within the repo
   // are not dead code.
   "publicPackages": ["@forge-ahead/remote", "@forge-ahead/errors"],
-  "workspaces": {
-    "packages": [
-      "apps/*",
-      "packages/*"
-    ]
-  },
+  // The vendored reference project is outside this simulator's analysis scope.
+  "ignorePatterns": ["vendor/**"],
   "duplicates": {
     // Common additions (uncomment to enable):
     // "ignore": [
