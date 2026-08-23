@@ -1,4 +1,11 @@
-import { type AgentCard, Role, TaskState } from "@a2a-js/sdk";
+import {
+  type AgentCard,
+  type Artifact,
+  type Message,
+  Role,
+  type TaskStatus,
+  TaskState,
+} from "@a2a-js/sdk";
 import {
   AgentEvent,
   type AgentExecutor,
@@ -70,7 +77,7 @@ const agentCard: AgentCard = {
   ],
   provider: undefined,
   version: "1.0.0",
-  capabilities: { extensions: [] },
+  capabilities: { extensions: [], streaming: true },
   securitySchemes: {},
   securityRequirements: [],
   defaultInputModes: ["text/plain"],
@@ -78,6 +85,50 @@ const agentCard: AgentCard = {
   skills: [],
   signatures: [],
 };
+
+function agentMessage(
+  taskId: string,
+  contextId: string,
+  text?: string,
+): Message {
+  return {
+    role: Role.ROLE_AGENT,
+    parts: text
+      ? [
+          {
+            content: { $case: "text", value: text },
+            filename: "",
+            mediaType: "text/plain",
+            metadata: {},
+          },
+        ]
+      : [],
+    messageId: crypto.randomUUID(),
+    taskId,
+    contextId,
+    metadata: {},
+    extensions: [],
+    referenceTaskIds: [],
+  };
+}
+
+function artifact(
+  step: NonNullable<LoadedScenario["steps"][number]["artifact"]>,
+): Artifact {
+  return {
+    artifactId: step.artifactId,
+    name: step.name ?? "",
+    description: step.description ?? "",
+    parts: step.parts.map((part) => ({
+      content: { $case: "text", value: part.text ?? "" },
+      filename: "",
+      mediaType: "text/plain",
+      metadata: {},
+    })),
+    metadata: step.metadata ?? {},
+    extensions: [],
+  };
+}
 
 function createAgentExecutor(scenarios: LoadedScenario[]): AgentExecutor {
   return {
@@ -97,8 +148,21 @@ function createAgentExecutor(scenarios: LoadedScenario[]): AgentExecutor {
         "[A2A] executing scenario",
       );
 
+      let status: TaskStatus | undefined;
       for (const step of scenario.steps) {
-        if (step.event === "content-update" || !step.state) continue;
+        if (step.event === "artifact-update" && step.artifact) {
+          eventBus.publish(
+            AgentEvent.artifactUpdate({
+              taskId,
+              contextId,
+              artifact: artifact(step.artifact),
+              append: step.append === true,
+              lastChunk: step.lastChunk === true,
+              metadata: {},
+            }),
+          );
+          continue;
+        }
         if (step.event !== "status-update") {
           log.warn(
             { taskId, contextId, scenarioId: scenario.id },
@@ -106,7 +170,7 @@ function createAgentExecutor(scenarios: LoadedScenario[]): AgentExecutor {
           );
           continue;
         }
-        const state = taskStates[step.state];
+        const state = step.state ? taskStates[step.state] : status?.state;
         if (!state) {
           log.warn(
             { taskId, contextId, scenarioId: scenario.id, state: step.state },
@@ -114,38 +178,41 @@ function createAgentExecutor(scenarios: LoadedScenario[]): AgentExecutor {
           );
           continue;
         }
-        eventBus.publish(
-          AgentEvent.task({
-            id: taskId,
-            contextId,
-            artifacts: [],
-            history: [],
-            metadata: {},
-            status: {
-              state,
-              message: {
-                role: Role.ROLE_AGENT,
-                parts: step.message
-                  ? [
-                      {
-                        content: { $case: "text", value: step.message },
-                        filename: "",
-                        mediaType: "text/plain",
-                        metadata: {},
-                      },
-                    ]
-                  : [],
-                messageId: crypto.randomUUID(),
-                taskId,
-                contextId,
-                metadata: {},
-                extensions: [],
-                referenceTaskIds: [],
-              },
-              timestamp: new Date().toISOString(),
-            },
-          }),
-        );
+        status = {
+          state,
+          message: agentMessage(taskId, contextId, step.message),
+          timestamp: new Date().toISOString(),
+        };
+        if (step === scenario.steps[0]) {
+          eventBus.publish(
+            AgentEvent.task({
+              id: taskId,
+              contextId,
+              artifacts: [],
+              history: [],
+              metadata: {},
+              status,
+            }),
+          );
+        } else {
+          eventBus.publish(
+            AgentEvent.statusUpdate({
+              taskId,
+              contextId,
+              status,
+              metadata: {},
+            }),
+          );
+        }
+        if (
+          [
+            TaskState.TASK_STATE_COMPLETED,
+            TaskState.TASK_STATE_REJECTED,
+            TaskState.TASK_STATE_FAILED,
+            TaskState.TASK_STATE_CANCELED,
+          ].includes(state)
+        )
+          break;
       }
     },
     async cancelTask() {},

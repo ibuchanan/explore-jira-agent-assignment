@@ -270,6 +270,88 @@ test("selects the first case-insensitive matching scenario", async (t) => {
   ]);
 });
 
+test("streams coding progress and chunked artifacts in declared order", async (t) => {
+  const { request, token } = await createFixture(t);
+  const response = await request({
+    token: token(),
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: "coding-stream",
+      method: "SendStreamingMessage",
+      params: {
+        message: {
+          contextId: "coding-context",
+          messageId: "coding-message",
+          role: "ROLE_USER",
+          parts: [{ text: "Please fix the login bug today" }],
+        },
+      },
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  const stream = await response.text();
+  const events = [
+    "Starting work on the login bug.",
+    "Inspecting the repository",
+    "Internal thinking:",
+    "Drafting a code change",
+    "patch-1",
+    "trailing whitespace cleanup",
+    "Tool: running the checkout test suite",
+    "Tool result: all 42 tests passed.",
+    "implementation-summary-1",
+    "Fixed the login bug and verified tests pass.",
+  ];
+  let previous = -1;
+  for (const event of events) {
+    const index = stream.indexOf(event);
+    assert.ok(index > previous, `expected ${event} after the previous event`);
+    previous = index;
+  }
+});
+
+test("streams rejected and failed scenarios with their correct terminal outcomes", async (t) => {
+  const { request, token } = await createFixture(t);
+  const stream = async (id: string, text: string) => {
+    const response = await request({
+      token: token(),
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id,
+        method: "SendStreamingMessage",
+        params: {
+          message: {
+            contextId: `${id}-context`,
+            messageId: `${id}-message`,
+            role: "ROLE_USER",
+            parts: [{ text }],
+          },
+        },
+      }),
+    });
+    assert.equal(response.status, 200);
+    return response.text();
+  };
+
+  const rejected = await stream("rejected", "reject immediately");
+  assert.match(rejected, /TASK_STATE_REJECTED/);
+  assert.equal(rejected.includes("TASK_STATE_WORKING"), false);
+
+  const failed = await stream(
+    "failed",
+    "push the fix to the archived-reports repository",
+  );
+  const working = failed.indexOf("TASK_STATE_WORKING");
+  const diagnostic = failed.indexOf("unapplied-patch-1");
+  const terminal = failed.indexOf("TASK_STATE_FAILED");
+  assert.ok(working >= 0 && diagnostic > working && terminal > diagnostic);
+  assert.equal(
+    failed.slice(terminal + 1).includes("TASK_STATE_WORKING"),
+    false,
+  );
+});
+
 test("returns a JSON-RPC error for a SendMessage request without a message", async (t) => {
   const { request, token } = await createFixture(t);
   const response = await request({

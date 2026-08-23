@@ -3,9 +3,20 @@ import { resolve } from "node:path";
 
 import { parse } from "yaml";
 
+type ScenarioArtifact = {
+  artifactId: string;
+  description?: string;
+  metadata?: Record<string, unknown>;
+  name?: string;
+  parts: { kind?: string; text?: string }[];
+};
+
 export type ScenarioStep = {
+  append?: boolean;
+  artifact?: ScenarioArtifact;
   event?: string;
   final?: boolean;
+  lastChunk?: boolean;
   message?: string;
   state?: string;
 };
