@@ -1,0 +1,33 @@
+{
+  "name": "explore-rovo-agent-connector",
+  "version": "1.0.0",
+  "private": true,
+  "description": "a sample app that defines a rovo agent connector powering integration to remote AI agents",
+  "license": "Apache-2.0",
+  "packageManager": "npm@11.17.0",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "check": "npm run --workspaces --if-present check",
+    "format": "npm run --workspaces --if-present format",
+    "format:scripts": "shfmt -w scripts/*.sh test/*.sh",
+    "lint": "npm run --workspaces --if-present lint",
+    "lint:scripts": "shellcheck scripts/*.sh test/*.sh",
+    "test": "npm run --workspaces --if-present test",
+    "test:scripts": "bash test/tunnel.test.sh && bash test/register.test.sh && bash test/deploy-tunnel.test.sh && bash test/deploy-tunnel.test.sh --approve-system-user-change",
+    "tools:check": "bash scripts/tools-check.sh",
+    "remote:start": "bash scripts/env-var.sh 'npm run --workspace=rovo-agent-connector-remote-backend start'",
+    "forge:deploy": "npm run --workspace=rovo-agent-connector forge:deploy",
+    "forge:deploy:approve-system-user-change": "npm run --workspace=rovo-agent-connector forge:deploy:approve-system-user-change",
+    "forge:deploy:tunnel": "bash scripts/deploy-tunnel.sh",
+    "forge:deploy:tunnel:approve-system-user-change": "bash scripts/deploy-tunnel.sh --approve-system-user-change",
+    "forge:install": "npm run --workspace=rovo-agent-connector forge:install",
+    "forge:uninstall": "npm run --workspace=rovo-agent-connector forge:uninstall"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.10",
+    "@types/node": "24",
+    "typescript": "^5.9"
+  }
+}

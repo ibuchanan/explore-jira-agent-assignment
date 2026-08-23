@@ -1,0 +1,35 @@
+app:
+  id: ari:cloud:ecosystem::app/bf2f1a31-0b9a-4111-837a-30d4297e1026
+  runtime:
+    name: nodejs24.x
+environment:
+  variables:
+    - REMOTE_BASE_URL
+modules:
+  # See: https://developer.atlassian.com/platform/forge/manifest-reference/modules/rovo-agent-connector
+  rovo:agentConnector:
+    - key: minimal-connector
+      name: Minimal Connector
+      description: Returns a fixed completed task to verify the A2A connection.
+      productContexts:
+        - jira
+      protocols:
+        agent2Agent:
+          version: "1.0"
+          jsonRpcTransport:
+            endpoint: a2a-json-rpc
+  # See: https://developer.atlassian.com/platform/forge/manifest-reference/endpoint
+  endpoint:
+    - key: a2a-json-rpc
+      remote: minimal-agent-remote
+      route:
+        path: /a2a/json-rpc
+# See: https://developer.atlassian.com/platform/forge/manifest-reference/remotes
+remotes:
+  - key: minimal-agent-remote
+    baseUrl: ${REMOTE_BASE_URL}
+    operations:
+      - compute
+permissions:
+  scopes:
+    - read:jira-work

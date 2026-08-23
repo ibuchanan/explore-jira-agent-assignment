@@ -1,0 +1,25 @@
+{
+  "name": "rovo-agent-connector-remote-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "the minimum Forge Remote backend for Rovo Agent Connector",
+  "license": "Apache-2.0",
+  "scripts": {
+    "check": "npm run format:check && npm run lint && npm run test",
+    "format": "biome format --write",
+    "format:check": "biome format",
+    "lint": "npm run lint:check",
+    "lint:check": "biome lint",
+    "lint:fix": "biome lint --write",
+    "start": "node src/index.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@a2a-js/sdk": "^1.0",
+    "@forge-ahead/remote": "github:ibuchanan/forge-ahead-remote",
+    "express": "^5.2"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0"
+  }
+}
