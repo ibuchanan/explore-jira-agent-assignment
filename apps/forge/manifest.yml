@@ -1,5 +1,5 @@
 app:
-  id: ari:cloud:ecosystem::app/bf2f1a31-0b9a-4111-837a-30d4297e1026
+  id: ari:cloud:ecosystem::app/cd8a9d8f-c176-435c-a254-9479215dd18f
   runtime:
     name: nodejs24.x
 environment:

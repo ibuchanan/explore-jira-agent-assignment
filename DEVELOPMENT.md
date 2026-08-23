@@ -53,18 +53,12 @@ This starts the remote A2A 1.0 service on `localhost:3000` with the SecretSpec-m
 ### Terminal 2: create the tunnel and deploy Forge
 
 ```bash
-npm run forge:deploy:tunnel
+npm run forge:deploy:tunnel:approve-system-user-change
 ```
 
 This command starts a Cloudflare Quick Tunnel, stores its generated `https://*.trycloudflare.com` URL as `REMOTE_BASE_URL`, deploys the Forge app, and remains attached to keep the tunnel alive. Leave this terminal running while testing.
 
-If Forge asks for `SYSTEM_USER_CHANGE_RULE` approval, review the effect: the app system user will no longer be @-mentionable. Only after deciding to accept that change, use the explicit approval workflow instead:
-
-```bash
-npm run forge:deploy:tunnel:approve-system-user-change
-```
-
-The approval is intentionally not part of the default deployment command. Future Forge approvals must remain explicit.
+The first deployment requires approval of `SYSTEM_USER_CHANGE_RULE`: the app system user will no longer be @-mentionable. The command makes that approval explicit. Forge may not require the approval on later deployments.
 
 ### Terminal 3: install in Jira
 
@@ -72,9 +66,9 @@ The approval is intentionally not part of the default deployment command. Future
 npm run forge:install
 ```
 
-Open Jira on the configured site and invoke **Agent Simulator** through the Rovo experience. A successful smoke test returns the completed response `Agent Simulator is working.`
+Open Jira on the configured site and invoke **Agent Simulator** through the Rovo experience. A successful smoke test displays a completed confirmation message using Markdown.
 
-Quick Tunnel URLs change when the tunnel stops. Restart Terminal 2 and rerun `npm run forge:deploy:tunnel` whenever that occurs.
+Quick Tunnel URLs change when the tunnel stops. Restart Terminal 2 and rerun its command whenever that occurs.
 
 ## Configuration
 
