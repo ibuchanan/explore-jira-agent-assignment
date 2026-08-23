@@ -35,9 +35,12 @@ import {
   validateScenarios,
 } from "./scenarios.js";
 
+type DiagnosticEvent = Record<string, unknown>;
+type Diagnostics = (event: DiagnosticEvent) => void;
 type ServerOptions = {
   appAri?: string;
   appId?: string;
+  diagnostics?: Diagnostics;
   jwksUrl?: string;
   scenarios?: LoadedScenario[];
 };
@@ -121,12 +124,20 @@ function artifact(
 
 type ScenarioSession = {
   canceled: boolean;
+  contextId: string;
+  invokerId: string;
   nextStep: number;
   scenario: LoadedScenario;
+  sessionId: string;
   status?: TaskStatus;
+  taskId: string;
+  tenantId: string;
 };
 
-function createAgentExecutor(scenarios: LoadedScenario[]): AgentExecutor {
+function createAgentExecutor(
+  scenarios: LoadedScenario[],
+  diagnostics: Diagnostics,
+): AgentExecutor {
   const sessions = new Map<string, ScenarioSession>();
 
   return {
@@ -141,19 +152,28 @@ function createAgentExecutor(scenarios: LoadedScenario[]): AgentExecutor {
       const scenario = existing?.scenario ?? selection.scenario;
       const session = existing ?? {
         canceled: false,
+        contextId,
+        invokerId: invocationContext.invokerId,
         nextStep: 0,
         scenario,
+        sessionId: crypto.randomUUID(),
+        taskId,
+        tenantId: invocationContext.tenantId,
       };
       sessions.set(taskId, session);
-      log.info(
-        {
-          taskId,
-          contextId,
-          scenarioId: scenario.id,
-          selection: existing ? "resume" : selection.category,
-        },
-        "[A2A] executing scenario",
-      );
+      diagnostics({
+        event: "scenario-selected",
+        taskId: session.taskId,
+        contextId: session.contextId,
+        sessionId: session.sessionId,
+        tenantId: session.tenantId,
+        invokerId: session.invokerId,
+        scenarioId: scenario.id,
+        selection: existing ? "resume" : selection.category,
+        workItemAvailability: invocationContext.workItem.availability,
+        commentAvailability: invocationContext.comment.availability,
+        callbackReadiness: "not-configured",
+      });
 
       for (
         let index = session.nextStep;
@@ -181,20 +201,30 @@ function createAgentExecutor(scenarios: LoadedScenario[]): AgentExecutor {
           continue;
         }
         if (step.event !== "status-update") {
-          log.warn(
-            { taskId, contextId, scenarioId: scenario.id },
-            "[A2A] Compliance Warning: unsupported scenario event",
-          );
+          diagnostics({
+            event: "compliance-warning",
+            taskId: session.taskId,
+            contextId: session.contextId,
+            sessionId: session.sessionId,
+            tenantId: session.tenantId,
+            scenarioId: scenario.id,
+            warning: "unsupported-scenario-event",
+          });
           continue;
         }
         const state = step.state
           ? taskStates[step.state]
           : session.status?.state;
         if (!state) {
-          log.warn(
-            { taskId, contextId, scenarioId: scenario.id, state: step.state },
-            "[A2A] Compliance Warning: unsupported task state",
-          );
+          diagnostics({
+            event: "compliance-warning",
+            taskId: session.taskId,
+            contextId: session.contextId,
+            sessionId: session.sessionId,
+            tenantId: session.tenantId,
+            scenarioId: scenario.id,
+            warning: "unsupported-task-state",
+          });
           continue;
         }
         const status = {
@@ -203,6 +233,15 @@ function createAgentExecutor(scenarios: LoadedScenario[]): AgentExecutor {
           timestamp: new Date().toISOString(),
         };
         session.status = status;
+        diagnostics({
+          event: "lifecycle",
+          taskId: session.taskId,
+          contextId: session.contextId,
+          sessionId: session.sessionId,
+          tenantId: session.tenantId,
+          scenarioId: scenario.id,
+          state: step.state ?? "unknown",
+        });
         if (index === 0) {
           eventBus.publish(
             AgentEvent.task(
@@ -228,7 +267,18 @@ function createAgentExecutor(scenarios: LoadedScenario[]): AgentExecutor {
             }),
           );
         }
-        if (step.waitForUserInput) return;
+        if (step.waitForUserInput) {
+          diagnostics({
+            event: "paused",
+            taskId: session.taskId,
+            contextId: session.contextId,
+            sessionId: session.sessionId,
+            tenantId: session.tenantId,
+            scenarioId: scenario.id,
+            state: step.state ?? "unknown",
+          });
+          return;
+        }
         if (
           [
             TaskState.TASK_STATE_COMPLETED,
@@ -247,6 +297,14 @@ function createAgentExecutor(scenarios: LoadedScenario[]): AgentExecutor {
       if (!session || session.canceled) return;
       session.canceled = true;
       const contextId = session.status?.message?.contextId ?? "";
+      diagnostics({
+        event: "canceled",
+        taskId: session.taskId,
+        contextId: session.contextId,
+        sessionId: session.sessionId,
+        tenantId: session.tenantId,
+        scenarioId: session.scenario.id,
+      });
       eventBus.publish(
         AgentEvent.statusUpdate({
           taskId,
@@ -266,6 +324,7 @@ function createAgentExecutor(scenarios: LoadedScenario[]): AgentExecutor {
 export function createA2aServer({
   appId = process.env.FORGE_APP_ID,
   appAri = appId && `ari:cloud:ecosystem::app/${appId}`,
+  diagnostics,
   jwksUrl = ATLASSIAN_FORGE_JWKS_URL,
   scenarios,
 }: ServerOptions = {}): Result<Express, ProblemDetails> {
@@ -284,10 +343,13 @@ export function createA2aServer({
     );
   }
 
+  const reportDiagnostics =
+    diagnostics ??
+    ((event: DiagnosticEvent) => log.info(event, "[A2A] diagnostic"));
   const requestHandler = new DefaultRequestHandler(
     agentCard,
     new InMemoryTaskStore(),
-    createAgentExecutor(loadedScenarios),
+    createAgentExecutor(loadedScenarios, reportDiagnostics),
   );
   const app = express();
   app.use((request, _, next) => {

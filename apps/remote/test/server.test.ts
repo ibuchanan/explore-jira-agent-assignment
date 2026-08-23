@@ -31,6 +31,7 @@ type CompletedResponse = {
     };
   };
 };
+type DiagnosticEvent = Record<string, unknown>;
 type Fixture = {
   request(options: RequestOptions): Promise<Response>;
   token(): string;
@@ -89,8 +90,14 @@ async function createFixture(
   {
     appAri = "app",
     appId,
+    diagnostics,
     scenarios,
-  }: { appAri?: string; appId?: string; scenarios?: LoadedScenario[] } = {},
+  }: {
+    appAri?: string;
+    appId?: string;
+    diagnostics?: (event: DiagnosticEvent) => void;
+    scenarios?: LoadedScenario[];
+  } = {},
 ): Promise<Fixture> {
   const keyPair = await crypto.subtle.generateKey(
     {
@@ -132,6 +139,7 @@ async function createFixture(
   const appResult = createA2aServer({
     ...(appId ? { appId } : { appAri }),
     jwksUrl,
+    ...(diagnostics ? { diagnostics } : {}),
     ...(scenarios ? { scenarios } : {}),
   });
   assert.equal(appResult.isOk(), true);
@@ -327,6 +335,89 @@ test("selects a scenario from a JSON-RPC Jira data part", async (t) => {
     JSON.stringify(body.result.task.status.message.parts),
     /Matched the Jira work item/,
   );
+});
+
+test("emits safe correlated diagnostics for a selected scenario", async (t) => {
+  const diagnostics: DiagnosticEvent[] = [];
+  const { request, token } = await createFixture(t, {
+    diagnostics: (event: DiagnosticEvent) => diagnostics.push(event),
+    scenarios: [
+      {
+        id: "work-item",
+        default: false,
+        match: { contains: [], workItem: { id: "PROJ-42" } },
+        steps: [{ event: "status-update", state: "completed" }],
+      },
+      {
+        id: "default",
+        default: true,
+        match: { contains: [] },
+        steps: [{ event: "status-update", state: "completed" }],
+      },
+    ],
+  });
+  const secret = "forge-token-secret";
+  const response = await request({
+    token: token(),
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: "diagnostic-run",
+      method: "SendMessage",
+      params: {
+        message: {
+          contextId: "diagnostic-context",
+          messageId: "diagnostic-message",
+          role: "ROLE_USER",
+          parts: [
+            { text: "Ignore this unnecessary Jira content." },
+            {
+              data: {
+                invocationContext: {
+                  workItem: {
+                    id: "PROJ-42",
+                    fields: { summary: "Sensitive work-item summary" },
+                  },
+                  comment: { body: "Sensitive comment body" },
+                  tenantId: "tenant-1",
+                  invokerId: "user-1",
+                  token: secret,
+                },
+              },
+            },
+          ],
+        },
+      },
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  const task = (await response.json()) as CompletedResponse;
+  const output = JSON.stringify(diagnostics);
+  assert.ok(
+    diagnostics.some(
+      (event) =>
+        event.event === "scenario-selected" &&
+        event.taskId === task.result.task.id &&
+        event.contextId === "diagnostic-context" &&
+        event.scenarioId === "work-item" &&
+        event.selection === "work-item" &&
+        event.tenantId === "tenant-1" &&
+        event.invokerId === "user-1" &&
+        event.workItemAvailability === "available" &&
+        event.commentAvailability === "available",
+    ),
+  );
+  assert.ok(
+    diagnostics.some(
+      (event) =>
+        event.event === "lifecycle" &&
+        event.taskId === task.result.task.id &&
+        event.state === "completed",
+    ),
+  );
+  assert.equal(output.includes(secret), false);
+  assert.equal(output.includes("Sensitive work-item summary"), false);
+  assert.equal(output.includes("Sensitive comment body"), false);
 });
 
 test("streams coding progress and chunked artifacts in declared order", async (t) => {
