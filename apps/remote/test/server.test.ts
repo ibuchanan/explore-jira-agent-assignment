@@ -1,18 +1,54 @@
-const assert = require("node:assert/strict");
-const { generateKeyPairSync, sign } = require("node:crypto");
-const { once } = require("node:events");
-const { createServer } = require("node:http");
-const test = require("node:test");
+import assert from "node:assert/strict";
+import { generateKeyPairSync, sign, type KeyObject } from "node:crypto";
+import { once } from "node:events";
+import { createServer, type Server } from "node:http";
+import test, { type TestContext } from "node:test";
 
-const { createA2aServer } = require("../src/server");
+import { createA2aServer } from "../src/server";
 
-function base64url(value) {
+type Algorithm = "ES256" | "RS256";
+type Claims = Record<string, unknown>;
+type RequestOptions = {
+  body: string;
+  contentType?: string;
+  path?: string;
+  token?: string;
+};
+type CompletedResponse = {
+  result: {
+    task: {
+      contextId: string;
+      id: string;
+      status: {
+        message: {
+          contextId: string;
+          messageId: string;
+          parts: unknown[];
+          role: string;
+          taskId: string;
+        };
+        state: string;
+        timestamp: string;
+      };
+    };
+  };
+};
+type Fixture = {
+  request(options: RequestOptions): Promise<Response>;
+  token(claims?: Claims): string;
+};
+
+function base64url(value: string | object): string {
   return Buffer.from(
     typeof value === "string" ? value : JSON.stringify(value),
   ).toString("base64url");
 }
 
-function signedFit(privateKey, payload, algorithm = "ES256") {
+function signedFit(
+  privateKey: KeyObject,
+  payload: Claims,
+  algorithm: Algorithm = "ES256",
+): string {
   const header = base64url({ alg: algorithm, kid: "test-key", typ: "JWT" });
   const body = base64url(payload);
   const input = Buffer.from(`${header}.${body}`);
@@ -24,21 +60,41 @@ function signedFit(privateKey, payload, algorithm = "ES256") {
   return `${header}.${body}.${signature}`;
 }
 
-async function listen(server) {
+async function listen(server: Server): Promise<string> {
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
-  return `http://127.0.0.1:${server.address().port}`;
+  const address = server.address();
+  if (!address || typeof address === "string")
+    throw new Error("server has no TCP address");
+  return `http://127.0.0.1:${address.port}`;
 }
 
-async function close(server) {
+async function close(server: Server): Promise<void> {
   server.closeAllConnections();
-  await new Promise((resolve) => server.close(resolve));
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => {
+      if (
+        (error as NodeJS.ErrnoException | undefined)?.code ===
+        "ERR_SERVER_NOT_RUNNING"
+      ) {
+        resolve();
+      } else if (error) {
+        reject(error);
+      } else {
+        resolve();
+      }
+    }),
+  );
 }
 
 async function createFixture(
-  t,
-  { algorithm = "ES256", appAri = "app", appId } = {},
-) {
+  t: TestContext,
+  {
+    algorithm = "ES256",
+    appAri = "app",
+    appId,
+  }: { algorithm?: Algorithm; appAri?: string; appId?: string } = {},
+): Promise<Fixture> {
   const keyPair =
     algorithm === "ES256"
       ? generateKeyPairSync("ec", { namedCurve: "prime256v1" })
@@ -67,7 +123,7 @@ async function createFixture(
   t.after(() => close(app));
 
   return {
-    token: (claims = {}) =>
+    token: (claims: Claims = {}) =>
       signedFit(
         keyPair.privateKey,
         {
@@ -83,7 +139,7 @@ async function createFixture(
       body,
       path = "/a2a/json-rpc",
       contentType = "application/json",
-    }) =>
+    }: RequestOptions) =>
       fetch(`${baseUrl}${path}`, {
         method: "POST",
         headers: {
@@ -113,7 +169,10 @@ test("returns a completed deterministic task for a verified SendMessage request"
   });
 
   assert.equal(response.status, 200);
-  const body = await response.json();
+  const body = (await response.json()) as CompletedResponse & {
+    id: string;
+    jsonrpc: string;
+  };
   assert.equal(body.jsonrpc, "2.0");
   assert.equal(body.id, "request-123");
   assert.equal(body.result.task.contextId, "context-456");
@@ -195,7 +254,10 @@ test("rejects invalid requests and reports unsupported methods", async (t) => {
 
   const malformed = await request({ token: token(), body: "not json" });
   assert.equal(malformed.status, 400);
-  assert.equal((await malformed.json()).error.code, -32600);
+  assert.equal(
+    ((await malformed.json()) as { error: { code: number } }).error.code,
+    -32600,
+  );
   const unsupported = await request({
     token: token(),
     body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "CancelTask" }),
@@ -222,8 +284,12 @@ test("creates fresh task and message IDs without echoing caller data", async (t)
     },
   });
   const [first, second] = await Promise.all([
-    request({ token: token(), body }).then((response) => response.json()),
-    request({ token: token(), body }).then((response) => response.json()),
+    request({ token: token(), body }).then(
+      async (response) => (await response.json()) as CompletedResponse,
+    ),
+    request({ token: token(), body }).then(
+      async (response) => (await response.json()) as CompletedResponse,
+    ),
   ]);
 
   assert.notEqual(first.result.task.id, second.result.task.id);

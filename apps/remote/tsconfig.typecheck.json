@@ -1,0 +1,8 @@
+{
+  "extends": "../../tsconfig.typecheck.json",
+  "compilerOptions": {
+    "noPropertyAccessFromIndexSignature": false,
+    "rootDir": "."
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}
