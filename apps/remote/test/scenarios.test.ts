@@ -1,10 +1,20 @@
 import assert from "node:assert/strict";
+import { dirname, resolve } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
+  bundledScenarioDirectory,
   invocationContextFromParts,
   selectScenario,
 } from "../src/scenarios.js";
+
+test("resolves bundled scenarios from the remote package layout", () => {
+  assert.equal(
+    bundledScenarioDirectory(),
+    resolve(dirname(fileURLToPath(import.meta.url)), "../scenarios"),
+  );
+});
 
 test("normalizes Jira context from an A2A data part", () => {
   assert.deepEqual(

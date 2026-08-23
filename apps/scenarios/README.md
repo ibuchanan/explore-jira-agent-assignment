@@ -3,6 +3,10 @@
 This directory contains YAML scenarios for the A2A Simulator. The remote loads
 all `.yaml` files when it starts, so restart it after changing a scenario:
 
+The remote build copies this directory to `apps/remote/dist/scenarios`. Deploy
+that directory alongside the compiled remote; the runtime resolves scenarios
+relative to its compiled module, not the process working directory.
+
 ```bash
 npm run remote:start
 ```

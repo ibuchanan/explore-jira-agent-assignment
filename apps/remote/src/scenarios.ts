@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { parse } from "yaml";
 
@@ -156,8 +157,12 @@ export function validateScenarios(
   return scenarios;
 }
 
+export function bundledScenarioDirectory(): string {
+  return resolve(dirname(fileURLToPath(import.meta.url)), "../scenarios");
+}
+
 export function loadScenarios(
-  directory = resolve(process.cwd(), "../scenarios"),
+  directory = bundledScenarioDirectory(),
 ): LoadedScenario[] {
   return validateScenarios(
     readdirSync(directory)
