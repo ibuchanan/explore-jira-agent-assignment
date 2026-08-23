@@ -195,9 +195,9 @@ test("returns a completed deterministic task for a verified SendMessage request"
   assert.equal(body.result.task.status.state, "TASK_STATE_COMPLETED");
   assert.deepEqual(body.result.task.status.message.parts, [
     {
-      mediaType: "text/plain",
+      mediaType: "text/markdown",
       metadata: {},
-      text: "Agent Simulator is working.",
+      text: `# Agent Simulator\n\n**Markdown is enabled.**\n\n- A list item\n- \`inline code\`\n\n<details>\n<summary>More details</summary>\n\nThis is collapsed supplemental content.\n</details>`,
     },
   ]);
   assert.equal(body.result.task.status.message.role, "ROLE_AGENT");

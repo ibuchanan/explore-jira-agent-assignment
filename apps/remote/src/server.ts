@@ -44,7 +44,7 @@ const agentCard: AgentCard = {
   securitySchemes: {},
   securityRequirements: [],
   defaultInputModes: ["text/plain"],
-  defaultOutputModes: ["text/plain"],
+  defaultOutputModes: ["text/markdown"],
   skills: [],
   signatures: [],
 };
@@ -67,10 +67,10 @@ const agentExecutor: AgentExecutor = {
               {
                 content: {
                   $case: "text",
-                  value: "Agent Simulator is working.",
+                  value: `# Agent Simulator\n\n**Markdown is enabled.**\n\n- A list item\n- \`inline code\`\n\n<details>\n<summary>More details</summary>\n\nThis is collapsed supplemental content.\n</details>`,
                 },
                 filename: "",
-                mediaType: "text/plain",
+                mediaType: "text/markdown",
                 metadata: {},
               },
             ],
