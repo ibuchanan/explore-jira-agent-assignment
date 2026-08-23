@@ -124,8 +124,13 @@ async function createFixture(
   const jwksUrl = `${await url(jwks)}/jwks`;
   t.after(() => close(jwks));
 
-  const app = createA2aServer(appId ? { appId, jwksUrl } : { appAri, jwksUrl });
-  const server = app.listen(0, "127.0.0.1");
+  const appResult = createA2aServer(
+    appId ? { appId, jwksUrl } : { appAri, jwksUrl },
+  );
+  assert.equal(appResult.isOk(), true);
+  if (appResult.isErr()) return assert.fail(appResult.error.detail);
+
+  const server = appResult.value.listen(0, "127.0.0.1");
   const baseUrl = await url(server);
   t.after(() => close(server));
 
@@ -147,6 +152,15 @@ async function createFixture(
       }),
   };
 }
+
+test("returns a configuration error instead of throwing", () => {
+  const result = createA2aServer({ appAri: "" });
+
+  assert.equal(result.isErr(), true);
+  if (result.isOk()) return assert.fail("expected a configuration error");
+  assert.equal(result.error.status, 500);
+  assert.equal(result.error.detail, "FORGE_APP_ID is required");
+});
 
 test("returns a completed deterministic task for a verified SendMessage request", async (t) => {
   const { request, token } = await createFixture(t, { appId: "test" });

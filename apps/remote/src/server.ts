@@ -1,8 +1,19 @@
 import {
+  ok,
+  type ProblemDetails,
+  type Result,
+  StandardError,
+} from "@forge-ahead/errors";
+import { log } from "@forge-ahead/logging";
+import {
   ATLASSIAN_FORGE_JWKS_URL,
   validateAuthHeader,
 } from "@forge-ahead/remote";
-import express, { type ErrorRequestHandler, type Response } from "express";
+import express, {
+  type ErrorRequestHandler,
+  type Express,
+  type Response,
+} from "express";
 
 type JsonRpcId = string | number;
 type RecordValue = Record<string, unknown>;
@@ -42,12 +53,14 @@ export function createA2aServer({
   appId = process.env.FORGE_APP_ID,
   appAri = appId && `ari:cloud:ecosystem::app/${appId}`,
   jwksUrl = ATLASSIAN_FORGE_JWKS_URL,
-}: ServerOptions = {}) {
-  if (!appAri) throw new Error("FORGE_APP_ID is required");
+}: ServerOptions = {}): Result<Express, ProblemDetails> {
+  if (!appAri) {
+    return StandardError.getOrDefault(500).error("FORGE_APP_ID is required");
+  }
 
   const app = express();
   app.use((_, __, next) => {
-    console.info("A2A request received");
+    log.info("A2A request received");
     next();
   });
   app.post(
@@ -64,7 +77,7 @@ export function createA2aServer({
 
       const authorization = request.headers.authorization;
       if (!authorization?.startsWith("Bearer ")) {
-        console.warn("A2A request rejected: missing bearer token");
+        log.warn("A2A request rejected: missing bearer token");
         response.status(401).end();
         return;
       }
@@ -74,7 +87,7 @@ export function createA2aServer({
         jwksUrl,
       });
       if (fit.isErr()) {
-        console.warn(`A2A FIT rejected: ${fit.error.title}`);
+        log.warn("A2A FIT rejected");
         response.status(fit.error.status ?? 401).end();
         return;
       }
@@ -84,7 +97,7 @@ export function createA2aServer({
     (request, response) => {
       const body: unknown = request.body;
       if (!isRecord(body)) {
-        console.warn("A2A request rejected: invalid JSON-RPC envelope");
+        log.warn("A2A request rejected: invalid JSON-RPC envelope");
         protocolError(response, null, -32600, "Invalid Request");
         return;
       }
@@ -95,7 +108,7 @@ export function createA2aServer({
         !(typeof id === "string" || typeof id === "number") ||
         typeof method !== "string"
       ) {
-        console.warn("A2A request rejected: invalid JSON-RPC envelope");
+        log.warn("A2A request rejected: invalid JSON-RPC envelope");
         protocolError(
           response,
           typeof id === "string" || typeof id === "number" ? id : null,
@@ -105,7 +118,7 @@ export function createA2aServer({
         return;
       }
       if (method !== "SendMessage") {
-        console.warn(`A2A method not supported: ${method}`);
+        log.warn("A2A method not supported");
         json(response, 200, {
           jsonrpc: "2.0",
           id,
@@ -130,7 +143,7 @@ export function createA2aServer({
         typeof requestedContextId === "string" && requestedContextId.trim()
           ? requestedContextId
           : crypto.randomUUID();
-      console.info("A2A SendMessage completed");
+      log.info("A2A SendMessage completed");
       json(response, 200, {
         jsonrpc: "2.0",
         id,
@@ -156,7 +169,7 @@ export function createA2aServer({
   );
   const invalidJson: ErrorRequestHandler = (error, _, response, next) => {
     if (error instanceof SyntaxError) {
-      console.warn("A2A request rejected: invalid JSON body");
+      log.warn("A2A request rejected: invalid JSON body");
       protocolError(response, null, -32600, "Invalid Request");
       return;
     }
@@ -164,9 +177,9 @@ export function createA2aServer({
   };
   app.use(invalidJson);
   app.use((_, response) => {
-    console.warn("A2A request rejected: unexpected HTTP method or path");
+    log.warn("A2A request rejected: unexpected HTTP method or path");
     response.status(404).end();
   });
 
-  return app;
+  return ok(app);
 }
