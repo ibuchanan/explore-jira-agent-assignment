@@ -23,17 +23,62 @@ export type ScenarioStep = {
   waitForUserInput?: boolean;
 };
 
+type WorkItemRule = { fields?: Record<string, string>; id?: string };
+type CommentRule = { body?: string; id?: string };
+export type MatchCategory =
+  | "comment"
+  | "default"
+  | "entry-surface"
+  | "invoker"
+  | "text"
+  | "tenant"
+  | "work-item";
+type ScenarioMatch = {
+  comment?: CommentRule;
+  contains: string[];
+  entrySurface?: string;
+  invokerId?: string;
+  tenantId?: string;
+  workItem?: WorkItemRule;
+};
+
 type Scenario = {
   default?: boolean;
   id?: string;
-  match?: { contains?: unknown };
+  match?: {
+    comment?: CommentRule;
+    contains?: unknown;
+    entrySurface?: string;
+    invokerId?: string;
+    tenantId?: string;
+    workItem?: WorkItemRule;
+  };
   steps?: unknown;
 };
 
 export type LoadedScenario = Required<Pick<Scenario, "id">> & {
   default: boolean;
-  match: { contains: string[] };
+  match: ScenarioMatch;
   steps: ScenarioStep[];
+};
+
+type ContextAvailability = "available" | "missing" | "restricted";
+
+export type InvocationContext = {
+  comment: {
+    availability: ContextAvailability;
+    body?: string;
+    id?: string;
+  };
+  entrySurface: string;
+  invokerId: string;
+  tenantId: string;
+  text: string;
+  workItem: {
+    availability: ContextAvailability;
+    fields: Record<string, unknown>;
+    id?: string;
+  };
 };
 
 function structuralError(filename: string, message: string): Error {
@@ -66,6 +111,19 @@ function parseScenario(filename: string): LoadedScenario {
             (phrase): phrase is string => typeof phrase === "string",
           )
         : [],
+      ...(scenario.match?.comment ? { comment: scenario.match.comment } : {}),
+      ...(typeof scenario.match?.entrySurface === "string"
+        ? { entrySurface: scenario.match.entrySurface }
+        : {}),
+      ...(typeof scenario.match?.invokerId === "string"
+        ? { invokerId: scenario.match.invokerId }
+        : {}),
+      ...(typeof scenario.match?.tenantId === "string"
+        ? { tenantId: scenario.match.tenantId }
+        : {}),
+      ...(scenario.match?.workItem
+        ? { workItem: scenario.match.workItem }
+        : {}),
     },
     steps: scenario.steps as ScenarioStep[],
   };
@@ -105,17 +163,144 @@ export function loadScenarios(
   );
 }
 
+function normalizeContext(
+  context: InvocationContext | string,
+): InvocationContext {
+  if (typeof context !== "string") return context;
+  return {
+    text: context,
+    workItem: { availability: "missing", fields: {} },
+    comment: { availability: "missing" },
+    entrySurface: "",
+    tenantId: "",
+    invokerId: "",
+  };
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function string(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+export function invocationContextFromParts(
+  parts: unknown[],
+): InvocationContext {
+  const text = parts
+    .flatMap((part) => {
+      const value = record(part);
+      const content = record(value.content);
+      const text =
+        value.text ?? (content.$case === "text" ? content.value : undefined);
+      return typeof text === "string" ? [text] : [];
+    })
+    .join("\n");
+  const data = parts
+    .map((part) => {
+      const value = record(part);
+      const content = record(value.content);
+      return (
+        value.data ?? (content.$case === "data" ? content.value : undefined)
+      );
+    })
+    .find((value) => value !== undefined);
+  const context = record(record(data).invocationContext ?? data);
+  const workItem = record(context.workItem ?? context.issue);
+  const comment = record(context.comment);
+  const availability = (value: Record<string, unknown>) =>
+    value.restricted === true
+      ? "restricted"
+      : Object.keys(value).length
+        ? "available"
+        : "missing";
+  const normalizedWorkItem: InvocationContext["workItem"] = {
+    availability: availability(workItem),
+    fields: record(workItem.fields),
+  };
+  const workItemId = string(workItem.id);
+  if (workItemId) normalizedWorkItem.id = workItemId;
+  const normalizedComment: InvocationContext["comment"] = {
+    availability: availability(comment),
+  };
+  const commentId = string(comment.id);
+  if (commentId) normalizedComment.id = commentId;
+  const commentBody = string(comment.body);
+  if (commentBody) normalizedComment.body = commentBody;
+  return {
+    text,
+    workItem: normalizedWorkItem,
+    comment: normalizedComment,
+    entrySurface: string(context.entrySurface) ?? "",
+    tenantId: string(context.tenantId) ?? "",
+    invokerId: string(context.invokerId) ?? "",
+  };
+}
+
+function includes(value: unknown, expected: string): boolean {
+  return (
+    typeof value === "string" &&
+    value.toLowerCase().includes(expected.toLowerCase())
+  );
+}
+
+function matchCategory(
+  scenario: LoadedScenario,
+  context: InvocationContext,
+): MatchCategory | undefined {
+  if (scenario.match.contains.some((phrase) => includes(context.text, phrase)))
+    return "text";
+  const workItem = scenario.match.workItem;
+  if (context.workItem.availability === "available" && workItem) {
+    if (workItem.id !== undefined && context.workItem.id === workItem.id)
+      return "work-item";
+    if (
+      Object.entries(workItem.fields ?? {}).some(([field, value]) =>
+        includes(context.workItem.fields[field], value),
+      )
+    )
+      return "work-item";
+  }
+  const comment = scenario.match.comment;
+  if (
+    context.comment.availability === "available" &&
+    ((comment?.id !== undefined && context.comment.id === comment.id) ||
+      (comment?.body !== undefined &&
+        includes(context.comment.body, comment.body)))
+  )
+    return "comment";
+  if (scenario.match.entrySurface === context.entrySurface)
+    return "entry-surface";
+  if (scenario.match.tenantId === context.tenantId) return "tenant";
+  if (scenario.match.invokerId === context.invokerId) return "invoker";
+  return undefined;
+}
+
+export type ScenarioSelection = {
+  category: MatchCategory;
+  scenario: LoadedScenario;
+};
+
+export function selectScenarioWithDiagnostic(
+  scenarios: LoadedScenario[],
+  invocationContext: InvocationContext | string,
+): ScenarioSelection {
+  const context = normalizeContext(invocationContext);
+  for (const scenario of scenarios) {
+    const category = matchCategory(scenario, context);
+    if (category) return { scenario, category };
+  }
+  const scenario = scenarios.find((candidate) => candidate.default);
+  if (!scenario) throw new Error("Scenario collection has no default scenario");
+  return { scenario, category: "default" };
+}
+
 export function selectScenario(
   scenarios: LoadedScenario[],
-  startingText: string,
+  invocationContext: InvocationContext | string,
 ): LoadedScenario {
-  const text = startingText.toLowerCase();
-  const scenario =
-    scenarios.find((candidate) =>
-      candidate.match.contains.some((phrase) =>
-        text.includes(phrase.toLowerCase()),
-      ),
-    ) ?? scenarios.find((candidate) => candidate.default);
-  if (!scenario) throw new Error("Scenario collection has no default scenario");
-  return scenario;
+  return selectScenarioWithDiagnostic(scenarios, invocationContext).scenario;
 }

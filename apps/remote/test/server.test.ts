@@ -3,6 +3,7 @@ import { once } from "node:events";
 import { createServer, type Server } from "node:http";
 import test, { type TestContext } from "node:test";
 
+import type { LoadedScenario } from "../src/scenarios.js";
 import { createA2aServer } from "../src/server.js";
 
 type RequestOptions = {
@@ -85,7 +86,11 @@ async function close(server: Server): Promise<void> {
 
 async function createFixture(
   t: TestContext,
-  { appAri = "app", appId }: { appAri?: string; appId?: string } = {},
+  {
+    appAri = "app",
+    appId,
+    scenarios,
+  }: { appAri?: string; appId?: string; scenarios?: LoadedScenario[] } = {},
 ): Promise<Fixture> {
   const keyPair = await crypto.subtle.generateKey(
     {
@@ -124,9 +129,11 @@ async function createFixture(
   const jwksUrl = `${await url(jwks)}/jwks`;
   t.after(() => close(jwks));
 
-  const appResult = createA2aServer(
-    appId ? { appId, jwksUrl } : { appAri, jwksUrl },
-  );
+  const appResult = createA2aServer({
+    ...(appId ? { appId } : { appAri }),
+    jwksUrl,
+    ...(scenarios ? { scenarios } : {}),
+  });
   assert.equal(appResult.isOk(), true);
   if (appResult.isErr()) return assert.fail(appResult.error.detail);
 
@@ -268,6 +275,58 @@ test("selects the first case-insensitive matching scenario", async (t) => {
       text: "Fixed the login bug and verified tests pass.",
     },
   ]);
+});
+
+test("selects a scenario from a JSON-RPC Jira data part", async (t) => {
+  const scenarios: LoadedScenario[] = [
+    {
+      id: "work-item",
+      default: false,
+      match: { contains: [], workItem: { id: "PROJ-42" } },
+      steps: [
+        {
+          event: "status-update",
+          state: "completed",
+          message: "Matched the Jira work item.",
+        },
+      ],
+    },
+    {
+      id: "default",
+      default: true,
+      match: { contains: [] },
+      steps: [
+        { event: "status-update", state: "completed", message: "Default." },
+      ],
+    },
+  ];
+  const { request, token } = await createFixture(t, { scenarios });
+  const response = await request({
+    token: token(),
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: "jira-context",
+      method: "SendMessage",
+      params: {
+        message: {
+          contextId: "jira-context",
+          messageId: "jira-message",
+          role: "ROLE_USER",
+          parts: [
+            { text: "No matching text." },
+            { data: { invocationContext: { workItem: { id: "PROJ-42" } } } },
+          ],
+        },
+      },
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  const body = (await response.json()) as CompletedResponse;
+  assert.match(
+    JSON.stringify(body.result.task.status.message.parts),
+    /Matched the Jira work item/,
+  );
 });
 
 test("streams coding progress and chunked artifacts in declared order", async (t) => {

@@ -28,9 +28,10 @@ import {
 } from "@forge-ahead/remote/express";
 import express, { type Express } from "express";
 import {
+  invocationContextFromParts,
   type LoadedScenario,
   loadScenarios,
-  selectScenario,
+  selectScenarioWithDiagnostic,
   validateScenarios,
 } from "./scenarios.js";
 
@@ -51,18 +52,6 @@ const taskStates: Record<string, TaskState> = {
   "auth-required": TaskState.TASK_STATE_AUTH_REQUIRED,
   unknown: TaskState.TASK_STATE_UNSPECIFIED,
 };
-
-function textParts(
-  parts: { content?: { $case?: string; value?: unknown } | undefined }[],
-) {
-  return parts
-    .flatMap(({ content }) =>
-      content?.$case === "text" && typeof content.value === "string"
-        ? [content.value]
-        : [],
-    )
-    .join("\n");
-}
 
 const agentCard: AgentCard = {
   name: "Agent Simulator",
@@ -144,9 +133,12 @@ function createAgentExecutor(scenarios: LoadedScenario[]): AgentExecutor {
     async execute(requestContext, eventBus) {
       const { taskId, contextId, task, userMessage } = requestContext;
       const existing = sessions.get(taskId);
-      const startingText = textParts(userMessage.parts);
-      const scenario =
-        existing?.scenario ?? selectScenario(scenarios, startingText);
+      const invocationContext = invocationContextFromParts(userMessage.parts);
+      const selection = selectScenarioWithDiagnostic(
+        scenarios,
+        invocationContext,
+      );
+      const scenario = existing?.scenario ?? selection.scenario;
       const session = existing ?? {
         canceled: false,
         nextStep: 0,
@@ -158,13 +150,7 @@ function createAgentExecutor(scenarios: LoadedScenario[]): AgentExecutor {
           taskId,
           contextId,
           scenarioId: scenario.id,
-          selection: existing
-            ? "resume"
-            : scenario.match.contains.some((phrase) =>
-                  startingText.toLowerCase().includes(phrase.toLowerCase()),
-                )
-              ? "match"
-              : "default",
+          selection: existing ? "resume" : selection.category,
         },
         "[A2A] executing scenario",
       );
