@@ -1,3 +1,11 @@
+import { type AgentCard, Role, TaskState } from "@a2a-js/sdk";
+import {
+  AgentEvent,
+  type AgentExecutor,
+  DefaultRequestHandler,
+  InMemoryTaskStore,
+} from "@a2a-js/sdk/server";
+import { jsonRpcHandler } from "@a2a-js/sdk/server/express";
 import {
   ok,
   type ProblemDetails,
@@ -5,26 +13,13 @@ import {
   StandardError,
 } from "@forge-ahead/errors";
 import { log } from "@forge-ahead/logging";
+import { ATLASSIAN_FORGE_JWKS_URL } from "@forge-ahead/remote";
 import {
-  ATLASSIAN_FORGE_JWKS_URL,
-  validateAuthHeader,
-} from "@forge-ahead/remote";
-import express, {
-  type ErrorRequestHandler,
-  type Express,
-  type Response,
-} from "express";
-
-type JsonRpcId = string | number;
-type RecordValue = Record<string, unknown>;
-type JsonRpcRequest = {
-  id?: unknown;
-  jsonrpc?: unknown;
-  method?: unknown;
-  params?: unknown;
-};
-type JsonRpcParameters = { message?: unknown };
-type A2aMessage = { contextId?: unknown };
+  forgeRemoteAuthMiddleware,
+  forgeRemoteServerCallContextBuilder,
+  forgeRemoteUserBuilder,
+} from "@forge-ahead/remote/express";
+import express, { type Express } from "express";
 
 type ServerOptions = {
   appAri?: string;
@@ -32,22 +27,66 @@ type ServerOptions = {
   jwksUrl?: string;
 };
 
-function isRecord(value: unknown): value is RecordValue {
-  return typeof value === "object" && value !== null;
-}
+const agentCard: AgentCard = {
+  name: "Minimal Connector",
+  description: "Returns a fixed completed task to verify the A2A connection.",
+  supportedInterfaces: [
+    {
+      protocolBinding: "JSONRPC",
+      protocolVersion: "1.0",
+      tenant: "",
+      url: "https://example.invalid/a2a/json-rpc",
+    },
+  ],
+  provider: undefined,
+  version: "1.0.0",
+  capabilities: { extensions: [] },
+  securitySchemes: {},
+  securityRequirements: [],
+  defaultInputModes: ["text/plain"],
+  defaultOutputModes: ["text/plain"],
+  skills: [],
+  signatures: [],
+};
 
-function json(response: Response, statusCode: number, body: unknown) {
-  response.status(statusCode).json(body);
-}
-
-function protocolError(
-  response: Response,
-  id: JsonRpcId | null,
-  code: number,
-  message: string,
-) {
-  json(response, 400, { jsonrpc: "2.0", id, error: { code, message } });
-}
+const agentExecutor: AgentExecutor = {
+  async execute({ taskId, contextId }, eventBus) {
+    eventBus.publish(
+      AgentEvent.task({
+        id: taskId,
+        contextId,
+        artifacts: [],
+        history: [],
+        metadata: {},
+        status: {
+          state: TaskState.TASK_STATE_COMPLETED,
+          message: {
+            role: Role.ROLE_AGENT,
+            parts: [
+              {
+                content: {
+                  $case: "text",
+                  value: "Minimal connector is working.",
+                },
+                filename: "",
+                mediaType: "text/plain",
+                metadata: {},
+              },
+            ],
+            messageId: crypto.randomUUID(),
+            taskId,
+            contextId,
+            metadata: {},
+            extensions: [],
+            referenceTaskIds: [],
+          },
+          timestamp: new Date().toISOString(),
+        },
+      }),
+    );
+  },
+  async cancelTask() {},
+};
 
 export function createA2aServer({
   appId = process.env.FORGE_APP_ID,
@@ -58,124 +97,29 @@ export function createA2aServer({
     return StandardError.getOrDefault(500).error("FORGE_APP_ID is required");
   }
 
+  const requestHandler = new DefaultRequestHandler(
+    agentCard,
+    new InMemoryTaskStore(),
+    agentExecutor,
+  );
   const app = express();
   app.use((_, __, next) => {
     log.info("A2A request received");
     next();
   });
-  app.post(
+  app.use(
     "/a2a/json-rpc",
-    async (request, response, next) => {
-      if (
-        !request.headers["content-type"]
-          ?.toLowerCase()
-          .startsWith("application/json")
-      ) {
-        response.status(415).end();
-        return;
-      }
-
-      const authorization = request.headers.authorization;
-      if (!authorization?.startsWith("Bearer ")) {
-        log.warn("A2A request rejected: missing bearer token");
-        response.status(401).end();
-        return;
-      }
-      const fit = await validateAuthHeader({
-        authorization,
-        audience: appAri,
-        jwksUrl,
-      });
-      if (fit.isErr()) {
-        log.warn("A2A FIT rejected");
-        response.status(fit.error.status ?? 401).end();
-        return;
-      }
-      next();
-    },
-    express.json(),
-    (request, response) => {
-      const body: unknown = request.body;
-      if (!isRecord(body)) {
-        log.warn("A2A request rejected: invalid JSON-RPC envelope");
-        protocolError(response, null, -32600, "Invalid Request");
-        return;
-      }
-      const rpc = body as JsonRpcRequest;
-      const { id, jsonrpc, method } = rpc;
-      if (
-        jsonrpc !== "2.0" ||
-        !(typeof id === "string" || typeof id === "number") ||
-        typeof method !== "string"
-      ) {
-        log.warn("A2A request rejected: invalid JSON-RPC envelope");
-        protocolError(
-          response,
-          typeof id === "string" || typeof id === "number" ? id : null,
-          -32600,
-          "Invalid Request",
-        );
-        return;
-      }
-      if (method !== "SendMessage") {
-        log.warn("A2A method not supported");
-        json(response, 200, {
-          jsonrpc: "2.0",
-          id,
-          error: { code: -32601, message: "Method not found" },
-        });
-        return;
-      }
-      if (!isRecord(rpc.params)) {
-        protocolError(response, id, -32600, "Invalid Request");
-        return;
-      }
-      const params = rpc.params as JsonRpcParameters;
-      if (!isRecord(params.message)) {
-        protocolError(response, id, -32600, "Invalid Request");
-        return;
-      }
-      const message = params.message as A2aMessage;
-
-      const taskId = crypto.randomUUID();
-      const requestedContextId = message.contextId;
-      const contextId =
-        typeof requestedContextId === "string" && requestedContextId.trim()
-          ? requestedContextId
-          : crypto.randomUUID();
-      log.info("A2A SendMessage completed");
-      json(response, 200, {
-        jsonrpc: "2.0",
-        id,
-        result: {
-          task: {
-            id: taskId,
-            contextId,
-            status: {
-              state: "TASK_STATE_COMPLETED",
-              message: {
-                role: "ROLE_AGENT",
-                parts: [{ text: "Minimal connector is working." }],
-                messageId: crypto.randomUUID(),
-                taskId,
-                contextId,
-              },
-              timestamp: new Date().toISOString(),
-            },
-          },
-        },
-      });
-    },
+    forgeRemoteAuthMiddleware({
+      audience: appAri,
+      issuer: "forge/invocation-token",
+      jwksUrl,
+    }),
+    jsonRpcHandler({
+      requestHandler,
+      userBuilder: forgeRemoteUserBuilder,
+      contextBuilder: forgeRemoteServerCallContextBuilder(),
+    }),
   );
-  const invalidJson: ErrorRequestHandler = (error, _, response, next) => {
-    if (error instanceof SyntaxError) {
-      log.warn("A2A request rejected: invalid JSON body");
-      protocolError(response, null, -32600, "Invalid Request");
-      return;
-    }
-    next(error);
-  };
-  app.use(invalidJson);
   app.use((_, response) => {
     log.warn("A2A request rejected: unexpected HTTP method or path");
     response.status(404).end();

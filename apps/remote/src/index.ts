@@ -1,6 +1,6 @@
 import { log } from "@forge-ahead/logging";
 
-import { createA2aServer } from "./server";
+import { createA2aServer } from "./server.js";
 
 const port = Number(process.env.PORT ?? 3000);
 const serverResult = createA2aServer();

@@ -48,7 +48,7 @@ Use three terminals after registration.
 npm run remote:start
 ```
 
-This starts the remote A2A service on `localhost:3000` with the SecretSpec-managed `FORGE_APP_ID`.
+This starts the remote A2A 1.0 service on `localhost:3000` with the SecretSpec-managed `FORGE_APP_ID`. The remote uses `@a2a-js/sdk` for A2A task and JSON-RPC handling, and `@forge-ahead/remote` for Forge Invocation Token authentication and tenant context.
 
 ### Terminal 2: create the tunnel and deploy Forge
 

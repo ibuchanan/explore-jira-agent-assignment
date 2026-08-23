@@ -3,7 +3,7 @@ import { once } from "node:events";
 import { createServer, type Server } from "node:http";
 import test, { type TestContext } from "node:test";
 
-import { createA2aServer } from "../src/server";
+import { createA2aServer } from "../src/server.js";
 
 type RequestOptions = {
   body: string;
@@ -146,6 +146,7 @@ async function createFixture(
         method: "POST",
         headers: {
           ...(token ? { authorization: `Bearer ${token}` } : {}),
+          "a2a-version": "1.0",
           "content-type": contentType,
         },
         body,
@@ -173,6 +174,8 @@ test("returns a completed deterministic task for a verified SendMessage request"
       params: {
         message: {
           contextId: "context-456",
+          messageId: "message-123",
+          role: "ROLE_USER",
           parts: [{ text: "do not echo this" }],
         },
       },
@@ -186,11 +189,16 @@ test("returns a completed deterministic task for a verified SendMessage request"
   };
   assert.equal(body.jsonrpc, "2.0");
   assert.equal(body.id, "request-123");
+  assert.ok(body.result, JSON.stringify(body));
   assert.equal(body.result.task.contextId, "context-456");
   assert.match(body.result.task.id, /^[0-9a-f-]{36}$/i);
   assert.equal(body.result.task.status.state, "TASK_STATE_COMPLETED");
   assert.deepEqual(body.result.task.status.message.parts, [
-    { text: "Minimal connector is working." },
+    {
+      mediaType: "text/plain",
+      metadata: {},
+      text: "Minimal connector is working.",
+    },
   ]);
   assert.equal(body.result.task.status.message.role, "ROLE_AGENT");
   assert.equal(body.result.task.status.message.taskId, body.result.task.id);
@@ -199,7 +207,7 @@ test("returns a completed deterministic task for a verified SendMessage request"
   assert.match(body.result.task.status.timestamp, /^\d{4}-\d{2}-\d{2}T/);
 });
 
-test("rejects a SendMessage request without a message", async (t) => {
+test("returns a JSON-RPC error for a SendMessage request without a message", async (t) => {
   const { request, token } = await createFixture(t);
   const response = await request({
     token: token(),
@@ -211,12 +219,15 @@ test("rejects a SendMessage request without a message", async (t) => {
     }),
   });
 
-  assert.equal(response.status, 400);
-  assert.deepEqual(await response.json(), {
-    jsonrpc: "2.0",
-    id: 7,
-    error: { code: -32600, message: "Invalid Request" },
-  });
+  assert.equal(response.status, 200);
+  const body = (await response.json()) as {
+    error: { code: number };
+    id: number;
+    jsonrpc: string;
+  };
+  assert.equal(body.jsonrpc, "2.0");
+  assert.equal(body.id, 7);
+  assert.equal(body.error.code, -32603);
 });
 
 test("rejects invalid requests and reports unsupported methods", async (t) => {
@@ -242,24 +253,29 @@ test("rejects invalid requests and reports unsupported methods", async (t) => {
         contentType: "text/plain",
       })
     ).status,
-    415,
+    400,
   );
 
   const malformed = await request({ token: token(), body: "not json" });
   assert.equal(malformed.status, 400);
   assert.equal(
     ((await malformed.json()) as { error: { code: number } }).error.code,
-    -32600,
+    -32700,
   );
   const unsupported = await request({
     token: token(),
-    body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "CancelTask" }),
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 3,
+      method: "UnknownMethod",
+      params: {},
+    }),
   });
   assert.equal(unsupported.status, 200);
   assert.deepEqual(await unsupported.json(), {
     jsonrpc: "2.0",
     id: 3,
-    error: { code: -32601, message: "Method not found" },
+    error: { code: -32601, message: "Invalid method." },
   });
 });
 
@@ -272,6 +288,8 @@ test("creates fresh task and message IDs without echoing caller data", async (t)
     params: {
       message: {
         contextId: "",
+        messageId: "message-789",
+        role: "ROLE_USER",
         parts: [{ data: { secret: "never return" } }],
       },
     },
@@ -291,5 +309,8 @@ test("creates fresh task and message IDs without echoing caller data", async (t)
     second.result.task.status.message.messageId,
   );
   assert.notEqual(first.result.task.contextId, second.result.task.contextId);
-  assert.equal(JSON.stringify(first).includes("never return"), false);
+  assert.equal(
+    JSON.stringify(first.result.task.status.message).includes("never return"),
+    false,
+  );
 });

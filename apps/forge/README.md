@@ -12,7 +12,9 @@ and configures the scopes and remote permissions needed by the integration.
 The Forge app demonstrates how to:
 
 - register a Jira remote agent through a `rovo:agentConnector` module
-- route Agent2Agent-inspired JSON-RPC traffic to the remote backend
+- route A2A 1.0 JSON-RPC traffic to the remote backend,
+  where `@a2a-js/sdk` owns protocol handling
+  and `@forge-ahead/remote` authenticates Forge traffic
 - route Forge installation lifecycle events to the remote backend
 - request app system and app user token forwarding for the remote service
 - declare the Jira scopes required by the sample
