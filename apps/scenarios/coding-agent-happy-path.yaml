@@ -1,6 +1,6 @@
-# Simulated Coding Remote Agent: a paced Markdown-rich coding task that
-# demonstrates progress, internal thinking, tool activity, and artifacts.
-# @see specs/tickets/05-coding-agent-content-happy-path.md
+# Simulates a review-ready coding-agent delivery without changing an external
+# repository, pull request, CI system, deployment, or Jira work item.
+# cspell:ignore supabase
 id: coding-agent-happy-path
 match:
   contains:
@@ -8,55 +8,88 @@ match:
 steps:
   - event: status-update
     state: working
-    message: "## Starting login-bug fix\n\nI’m tracing the session lifecycle and will report each milestone."
-  - event: status-update
-    message: "### Investigation\n\n- Located the login/session code path\n- Comparing **refresh** and **validation** order"
-    delayMs: 1000
-  - event: status-update
-    message: "> **Internal thinking**\n> Validation currently runs before token refresh. Reversing that order should preserve valid renewed sessions."
-    delayMs: 1000
-  - event: status-update
-    message: "### Change plan\n\n1. Refresh the session token\n2. Validate the refreshed session\n3. Keep the existing failure handling"
-    delayMs: 1000
+    message: "## Simulated delivery started\n\nI understand the login failure as a session-lifecycle issue. I will inspect the affected path, propose a scoped fix, verify it, and prepare a review-ready handoff."
+  - event: jira-callback
+    action: read
+    delayMs: 500
   - event: artifact-update
     artifact:
-      artifactId: patch-1
-      name: "login-session-order.patch"
-      description: "Reorders session validation to run after the token refresh."
+      artifactId: delivery-plan-1
+      name: "Delivery plan — login session lifecycle"
+      description: "A simulated, reviewable plan before implementation begins."
+      metadata:
+        kind: delivery-plan
+        simulated: true
+      parts:
+        - kind: text
+          text: "## Delivery plan\n\n### Goal\nMake valid renewed sessions pass login validation.\n\n### Scope\n- Refresh the token before validating the session\n- Add regression coverage for renewed and expired sessions\n- Preserve existing rejection and audit behavior\n\n### Guardrails\n- No schema migration, production deployment, or external repository change\n- Run focused authentication tests, static analysis, and security checks\n\n### Success criteria\nA renewed session is accepted, an expired session is rejected, and existing logout behavior remains unchanged."
+    delayMs: 500
+  - event: status-update
+    state: input-required
+    message: "## Delivery plan ready for approval\n\nThe simulated plan preserves the existing session-validation contract and adds focused regression coverage. Reply **Approve plan** to continue with the simulated implementation, or provide constraints to revise the plan."
+    waitForUserInput: true
+  - event: status-update
+    message: "### Repository intelligence\n\n**Simulated findings:** validation currently reads the stale token before refresh. The smallest safe change is to refresh first, then reuse the existing validation and failure paths."
+    delayMs: 500
+  - event: artifact-update
+    artifact:
+      artifactId: implementation-patch-1
+      name: "Proposed login session fix"
+      description: "Simulated patch for session refresh ordering and its regression tests."
       metadata:
         kind: patch
+        simulated: true
       parts:
         - kind: text
-          text: "```diff\n--- a/session.ts\n+++ b/session.ts\n@@ refresh before validate\n+await refreshToken(session);\n validateSession(session);\n```"
-    delayMs: 1000
+          text: "## Implementation patch — part 1 of 2\n\n```diff\n--- a/src/auth/session.ts\n+++ b/src/auth/session.ts\n@@ async function restoreSession(session) {\n-  validateSession(session);\n   await refreshToken(session);\n+  validateSession(session);\n }\n```\n\nThe existing validation function and error handling remain unchanged."
+    delayMs: 500
   - event: artifact-update
     artifact:
-      artifactId: patch-1
+      artifactId: implementation-patch-1
       parts:
         - kind: text
-          text: "\n```diff\n@@ trailing whitespace cleanup\n-const valid = validateSession(session);  \n+const valid = validateSession(session);\n```"
+          text: "\n\n## Implementation patch — part 2 of 2\n\n```diff\n--- a/test/auth/session.test.ts\n+++ b/test/auth/session.test.ts\n@@ renewed session\n+it(\"accepts a renewed session after refresh\", async () => {\n+  await expect(restoreSession(renewedSession)).resolves.toMatchObject({\n+    state: \"active\",\n+  });\n+});\n\n@@ expired session\n+it(\"rejects an expired session after refresh\", async () => {\n+  await expect(restoreSession(expiredSession)).rejects.toMatchObject({\n+    code: \"SESSION_EXPIRED\",\n+  });\n+});\n```"
     append: true
     lastChunk: true
-    delayMs: 1000
+    delayMs: 500
   - event: status-update
-    message: "### Verification\n\n\U0001F9EA **Running** the checkout test suite against the proposed change."
-    delayMs: 1000
-  - event: status-update
-    message: "✅ **42 tests passed**\n\nThe checkout flow remains green after the session-order change."
-    delayMs: 1000
+    message: "### Quality gate\n\nRunning the simulated authentication regression suite, type check, lint, dependency scan, and secret scan against the proposed patch."
+    delayMs: 500
   - event: artifact-update
     artifact:
-      artifactId: implementation-summary-1
-      name: "Login bug fix summary"
-      description: "Reordered session validation so the token refresh runs first, verified by the checkout test suite."
+      artifactId: verification-report-1
+      name: "Verification report"
+      description: "Simulated evidence that the proposed change meets its stated guardrails."
       metadata:
-        kind: implementation-summary
+        kind: verification-report
+        simulated: true
       parts:
         - kind: text
-          text: "## Implementation summary\n\n- Refreshes the token **before** validation\n- Preserves existing validation behavior\n- Verified by the checkout test suite"
-    delayMs: 1000
+          text: "## Verification report\n\n| Check | Result | Evidence |\n| --- | --- | --- |\n| Authentication regression suite | Passed | 42 tests, including renewed and expired sessions |\n| Type check and lint | Passed | No new diagnostics |\n| Security review | Passed | No token exposure, permission, or dependency changes |\n| Compatibility check | Passed | Logout and invalid-session behavior unchanged |\n\n### Residual risk\nThe change relies on the existing token-refresh timeout. Monitor login timeout rate after a real rollout."
+    delayMs: 500
+  - event: status-update
+    message: "### Review preparation\n\nThe proposed patch is verified within the simulated environment. I’m packaging the rationale, evidence, risks, and requested reviewer decision."
+    delayMs: 500
+  - event: artifact-update
+    artifact:
+      artifactId: review-handoff-1
+      name: "Review-ready delivery handoff"
+      description: "Simulated pull-request-style handoff; no external branch or pull request was created."
+      metadata:
+        kind: review-handoff
+        simulated: true
+      parts:
+        - kind: text
+          text: "## Review-ready handoff\n\n### Proposed outcome\nRefresh the session token before validation so renewed sessions can complete login.\n\n### Review checklist\n- [ ] Confirm refresh-before-validation is the intended authentication contract\n- [ ] Review the session and regression-test diffs\n- [ ] Confirm the existing timeout is appropriate for rollout monitoring\n\n### Delivery record\n- Simulated branch: `agent/fix-login-session-order`\n- Simulated pull request: `AUTH-482`\n- External reference pull request: [supabase/supabase#48329](https://github.com/supabase/supabase/pull/48329)\n- External repository, CI, deployment, and pull request: **not changed**\n\n### Requested next action\nReview the proposed patch. Approve it for a real implementation, request changes, or provide additional authentication constraints."
+    delayMs: 500
+  - event: jira-callback
+    action: comment
+    delayMs: 500
+  - event: jira-callback
+    action: transition
+    delayMs: 500
   - event: status-update
     state: completed
-    message: "## ✅ Login bug fixed\n\nSession tokens now refresh before validation; the checkout suite passed."
+    message: "## Simulated coding delivery is review-ready\n\nI prepared a scoped plan, proposed patch, verification report, and review handoff. No external repository, pull request, deployment, or Jira work item was changed."
     final: true
-    delayMs: 1000
+    delayMs: 500

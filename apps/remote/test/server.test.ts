@@ -351,12 +351,13 @@ test("selects the first case-insensitive matching scenario", async (t) => {
 
   assert.equal(response.status, 200);
   const body = (await response.json()) as CompletedResponse;
-  assert.equal(body.result.task.status.state, "TASK_STATE_COMPLETED");
+  assert.equal(body.result.task.status.state, "TASK_STATE_INPUT_REQUIRED");
   assert.deepEqual(body.result.task.status.message.parts, [
     {
       mediaType: "text/markdown",
       metadata: {},
-      text: "## ✅ Login bug fixed\n\nSession tokens now refresh before validation; the checkout suite passed.",
+      text:
+        "## Delivery plan ready for approval\n\nThe simulated plan preserves the existing session-validation contract and adds focused regression coverage. Reply **Approve plan** to continue with the simulated implementation, or provide constraints to revise the plan.",
     },
   ]);
 });
@@ -866,7 +867,7 @@ test("emits a terminal log when a Jira callback rejects a task", async (t) => {
   );
 });
 
-test("streams coding progress and chunked artifacts in declared order", async (t) => {
+test("streams a coding delivery plan before requiring approval", async (t) => {
   const { request, token } = await createFixture(t);
   const response = await request({
     token: token(),
@@ -888,16 +889,9 @@ test("streams coding progress and chunked artifacts in declared order", async (t
   assert.equal(response.status, 200);
   const stream = await response.text();
   const events = [
-    "Starting login-bug fix",
-    "### Investigation",
-    "Internal thinking",
-    "### Change plan",
-    "patch-1",
-    "trailing whitespace cleanup",
-    "### Verification",
-    "42 tests passed",
-    "implementation-summary-1",
-    "## ✅ Login bug fixed",
+    "Simulated delivery started",
+    "delivery-plan-1",
+    "Delivery plan ready for approval",
   ];
   let previous = -1;
   for (const event of events) {

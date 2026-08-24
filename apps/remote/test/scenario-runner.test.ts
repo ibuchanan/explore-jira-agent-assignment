@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { TaskState } from "@a2a-js/sdk";
 import { createScenarioRunner } from "../src/scenario-runner.js";
-import type { LoadedScenario } from "../src/scenarios.js";
+import { loadScenarios, type LoadedScenario } from "../src/scenarios.js";
 
 function stateFromEvent(event: unknown): TaskState | undefined {
   if (!event || typeof event !== "object") return undefined;
@@ -197,4 +197,69 @@ test("resumes a paused scenario with working before completion", async () => {
     TaskState.TASK_STATE_WORKING,
     TaskState.TASK_STATE_COMPLETED,
   ]);
+});
+
+test("plays the rich simulated coding-agent lifecycle", async () => {
+  const scenario = loadScenarios().find(
+    ({ id }) => id === "coding-agent-happy-path",
+  );
+  assert.ok(scenario);
+
+  const runner = createScenarioRunner({
+    scenarios: [
+      {
+        ...scenario,
+        default: false,
+        steps: scenario.steps.map((step) => ({ ...step, delayMs: 0 })),
+      },
+      {
+        id: "fallback",
+        default: true,
+        match: { contains: [] },
+        steps: [{ event: "status-update", state: "completed" }],
+      },
+    ],
+  });
+  const events: unknown[] = [];
+  const eventBus = { publish: (event: unknown) => events.push(event) };
+  const requestContext = {
+    context: {
+      comment: { availability: "missing" },
+      entrySurface: "issue-panel",
+      invokerId: "user-1",
+      tenantId: "tenant-1",
+      text: "fix the login bug",
+      workItem: { availability: "missing", fields: {} },
+    },
+    contextId: "context-1",
+    taskId: "task-1",
+    userMessage: { parts: [{ text: "fix the login bug" }] },
+  };
+
+  await runner.execute(requestContext as never, eventBus as never);
+
+  assert.equal(
+    stateFromEvent(events.at(-1)),
+    TaskState.TASK_STATE_INPUT_REQUIRED,
+  );
+  assert.match(JSON.stringify(events), /delivery-plan-1/);
+
+  await runner.execute(
+    {
+      ...requestContext,
+      userMessage: { parts: [{ text: "Approve plan" }] },
+    } as never,
+    eventBus as never,
+  );
+
+  assert.equal(stateFromEvent(events.at(-1)), TaskState.TASK_STATE_COMPLETED);
+  const delivered = JSON.stringify(events);
+  for (const artifact of [
+    "delivery-plan-1",
+    "implementation-patch-1",
+    "verification-report-1",
+    "review-handoff-1",
+  ]) {
+    assert.match(delivered, new RegExp(artifact));
+  }
 });
