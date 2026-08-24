@@ -25,7 +25,7 @@
     "lint:scripts": "shellcheck scripts/*.sh test/*.sh",
     "remote:start": "bash scripts/env-var.sh 'npm run --workspace=rovo-agent-connector-remote-backend start'",
     "test": "npm run --workspaces --if-present test",
-    "test:scripts": "bash test/manifest.test.sh && bash test/tunnel.test.sh && bash test/register.test.sh && bash test/deploy-tunnel.test.sh && bash test/deploy-tunnel.test.sh --approve-system-user-change && bash test/jira-streaming-lifecycle-smoke.test.sh",
+    "test:scripts": "bash test/manifest.test.sh && bash test/tunnel.test.sh && bash test/register.test.sh && bash test/deploy-tunnel.test.sh && bash test/deploy-tunnel.test.sh --approve-system-user-change && bash test/jira-streaming-lifecycle-smoke.test.sh && bash test/jira-streaming-compatibility.test.sh",
     "tools:check": "bash scripts/tools-check.sh",
     "typecheck": "npm run --workspaces --if-present typecheck"
   },

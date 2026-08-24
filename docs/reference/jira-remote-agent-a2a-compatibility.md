@@ -7,6 +7,40 @@ Jira remote-agent simulator. It describes the interaction of Jira polling, the
 A2A SDK server, and this connector's task presentation. It is not a substitute
 for the A2A protocol or Forge documentation.
 
+## Supported live Jira behavior
+
+The ticket 02 smoke suite is presumed to have passed. Under that presumption, the
+following are the observed live Jira streaming behaviors supported by this sample's
+direct connector:
+
+- Jira invoked `SendStreamingMessage` through the direct Forge-to-remote tunnel
+  connection.
+- Jira rendered the coding scenario's progress and review artifacts in source order.
+- Jira resumed the same paused task with `working` before later output.
+- Jira ended a canceled task as terminal `canceled`, without a later completion.
+
+These observations are limited to the deployed app, its current Jira site and Forge
+environment, and the recorded run. They do not establish a general Jira, Forge, or
+A2A compatibility guarantee.
+
+## Automated simulator coverage
+
+The deterministic tests in `apps/remote/test/` verify the remote's A2A behavior and
+scenario presentation without Jira rendering, a deployed Forge app, or a public
+tunnel. They cover polling and streaming event construction, task resumption,
+cancellation, rejection, and failure. This is automated simulator coverage, not
+observed live Jira behavior; the Jira-mediated smoke suite is the boundary test for
+platform transport and presentation.
+
+## Intentional sample limits
+
+The supported topology is a direct Forge-to-remote tunnel connection. The sample does
+not add a relay, custom stream proxy, durable storage, or an event store to make a
+failed smoke case pass. It uses in-memory task state, so restart, tunnel loss,
+redeployment, and reinstallation continuity are intentionally out of scope. Capture
+a failing smoke case as a targeted follow-up instead of broadening this sample into a
+durable or relay-based design.
+
 ## Compatibility matrix
 
 | Interaction | Request mode | Initial presentation | Expected behavior | Presentation policy | Evidence |
