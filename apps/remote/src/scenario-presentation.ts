@@ -29,6 +29,18 @@ export function projectScenarioSteps(
     if (!current) continue;
     const next = steps[index + 1];
     if (
+      current.event === "status-update" &&
+      current.state === "completed" &&
+      current.showConclusionBeforeCompletion === true &&
+      typeof current.message === "string"
+    ) {
+      projected.push({
+        event: "status-update",
+        state: "working",
+        message: current.message,
+      });
+      projected.push(current);
+    } else if (
       next &&
       isCheckpoint(current, next) &&
       typeof current.message === "string" &&

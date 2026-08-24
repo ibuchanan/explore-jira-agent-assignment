@@ -352,14 +352,10 @@ test("selects the first case-insensitive matching scenario", async (t) => {
   assert.equal(response.status, 200);
   const body = (await response.json()) as CompletedResponse;
   assert.equal(body.result.task.status.state, "TASK_STATE_INPUT_REQUIRED");
-  assert.deepEqual(body.result.task.status.message.parts, [
-    {
-      mediaType: "text/markdown",
-      metadata: {},
-      text:
-        "## Delivery plan ready for approval\n\nThe simulated plan preserves the existing session-validation contract and adds focused regression coverage. Reply **Approve plan** to continue with the simulated implementation, or provide constraints to revise the plan.",
-    },
-  ]);
+  const statusMessage = JSON.stringify(body.result.task.status.message);
+  assert.match(statusMessage, /Delivery plan ready for approval/);
+  assert.match(statusMessage, /### Goal/);
+  assert.match(statusMessage, /Approve delivery plan/);
 });
 
 test("selects a scenario from a JSON-RPC Jira data part", async (t) => {
@@ -889,9 +885,9 @@ test("streams a coding delivery plan before requiring approval", async (t) => {
   assert.equal(response.status, 200);
   const stream = await response.text();
   const events = [
-    "Simulated delivery started",
-    "delivery-plan-1",
+    "Delivery started",
     "Delivery plan ready for approval",
+    "### Goal",
   ];
   let previous = -1;
   for (const event of events) {

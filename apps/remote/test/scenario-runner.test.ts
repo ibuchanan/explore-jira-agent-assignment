@@ -242,20 +242,42 @@ test("plays the rich simulated coding-agent lifecycle", async () => {
     stateFromEvent(events.at(-1)),
     TaskState.TASK_STATE_INPUT_REQUIRED,
   );
-  assert.match(JSON.stringify(events), /delivery-plan-1/);
+  assert.match(JSON.stringify(events), /### Goal/);
 
   await runner.execute(
     {
       ...requestContext,
-      userMessage: { parts: [{ text: "Approve plan" }] },
+      userMessage: { parts: [{ text: "Approve delivery plan" }] },
+    } as never,
+    eventBus as never,
+  );
+
+  assert.equal(
+    stateFromEvent(events.at(-1)),
+    TaskState.TASK_STATE_INPUT_REQUIRED,
+  );
+  assert.match(JSON.stringify(events), /### Evidence/);
+  const secondApprovalEventCount = events.length;
+
+  await runner.execute(
+    {
+      ...requestContext,
+      userMessage: { parts: [{ text: "Approve technical approach" }] },
     } as never,
     eventBus as never,
   );
 
   assert.equal(stateFromEvent(events.at(-1)), TaskState.TASK_STATE_COMPLETED);
+  const resumedStates = events
+    .slice(secondApprovalEventCount)
+    .map(stateFromEvent)
+    .filter((state): state is TaskState => state !== undefined);
+  assert.equal(resumedStates[0], TaskState.TASK_STATE_WORKING);
+  assert.ok(!resumedStates.includes(TaskState.TASK_STATE_INPUT_REQUIRED));
+
   const delivered = JSON.stringify(events);
+  assert.match(delivered, /supabase\/supabase#48329/);
   for (const artifact of [
-    "delivery-plan-1",
     "implementation-patch-1",
     "verification-report-1",
     "review-handoff-1",

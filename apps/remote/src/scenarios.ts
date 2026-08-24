@@ -24,6 +24,7 @@ export type ScenarioStep = {
   result?: "simulated" | "auth-required" | "rejected" | "failed";
   real?: boolean;
   state?: string;
+  showConclusionBeforeCompletion?: boolean;
   transitionId?: string;
   waitForUserInput?: boolean;
 };

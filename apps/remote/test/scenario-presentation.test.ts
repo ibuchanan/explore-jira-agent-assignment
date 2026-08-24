@@ -42,3 +42,32 @@ test("does not coalesce a non-pausing state transition for polling", () => {
 
   assert.deepEqual(projectScenarioSteps(steps, "polling"), steps);
 });
+
+test("publishes a polling conclusion before terminal completion", () => {
+  const steps: ScenarioStep[] = [
+    { event: "status-update", state: "working", message: "Implementing" },
+    {
+      event: "status-update",
+      state: "completed",
+      message: "Review [PR #42](https://example.test/pr/42).",
+      final: true,
+      showConclusionBeforeCompletion: true,
+    },
+  ];
+
+  assert.deepEqual(projectScenarioSteps(steps, "polling"), [
+    steps[0],
+    {
+      event: "status-update",
+      state: "working",
+      message: "Review [PR #42](https://example.test/pr/42).",
+    },
+    {
+      event: "status-update",
+      state: "completed",
+      message: "Review [PR #42](https://example.test/pr/42).",
+      final: true,
+      showConclusionBeforeCompletion: true,
+    },
+  ]);
+});
