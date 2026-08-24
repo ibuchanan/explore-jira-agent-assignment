@@ -159,6 +159,8 @@ rather than a degraded fallback.
 
 ## Further reading
 
+- [Why Jira polling tasks need an initial task event](jira-polling-task-start.md)
+- [Jira remote-agent A2A compatibility](../reference/jira-remote-agent-a2a-compatibility.md)
 - [Integrate remote agents with Jira — Streaming (optional)](https://developer.atlassian.com/platform/forge/remote-agents-in-jira/#streaming-optional)
 - [Integrate remote agents with Jira — `GetTask`](https://developer.atlassian.com/platform/forge/remote-agents-in-jira/#gettask)
 - [How a Jira Remote Agent Connector Works](rovo-agent-connector.md)

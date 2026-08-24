@@ -20,11 +20,11 @@ const checkpoint: ScenarioStep[] = [
 
 test("coalesces a transient working checkpoint for polling", () => {
   assert.deepEqual(projectScenarioSteps(checkpoint, "polling"), [
+    checkpoint[0],
     {
       event: "status-update",
       state: "input-required",
-      message:
-        "# Markdown showcase\n\nReply `Continue` for the next example.",
+      message: "# Markdown showcase\n\nReply `Continue` for the next example.",
       waitForUserInput: true,
     },
   ]);

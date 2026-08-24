@@ -34,10 +34,12 @@ export function projectScenarioSteps(
       typeof current.message === "string" &&
       typeof next.message === "string"
     ) {
-      projected.push({
+      const checkpoint = {
         ...next,
         message: `${current.message}\n\n${next.message}`,
-      });
+      };
+      if (index === 0) projected.push(current);
+      projected.push(checkpoint);
       index += 1;
     } else projected.push(current);
   }

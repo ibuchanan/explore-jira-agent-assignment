@@ -146,10 +146,11 @@ test("freezes the polling projection when creating a task", async () => {
   await runner.execute(requestContext as never, eventBus as never);
 
   assert.deepEqual(events.map(stateFromEvent), [
+    TaskState.TASK_STATE_WORKING,
     TaskState.TASK_STATE_INPUT_REQUIRED,
     TaskState.TASK_STATE_COMPLETED,
   ]);
-  assert.equal(messageFromEvent(events[0]), "Progress\n\nContinue");
+  assert.equal(messageFromEvent(events[1]), "Progress\n\nContinue");
   assert.deepEqual(
     diagnostics.find((event) => event.event === "scenario.transport.mismatch"),
     {
