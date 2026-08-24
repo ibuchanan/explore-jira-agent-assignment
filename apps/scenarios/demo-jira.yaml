@@ -1,5 +1,5 @@
 # Demonstrates every remote-to-Jira action.
-id: jira-callbacks
+id: demo-jira
 match:
   contains:
     - "jira callbacks"

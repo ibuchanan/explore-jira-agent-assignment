@@ -1,5 +1,5 @@
 # An agent blocked on an administrator-managed repository connection.
-id: auth-required-connection-configuration
+id: auth-required
 match:
   contains:
     - "repository connection"

@@ -27,7 +27,7 @@ snapshot Jira retrieves.
 
 ## 3. Open the showcase scenario
 
-Open [`apps/scenarios/markdown-happy-path.yaml`](../../apps/scenarios/markdown-happy-path.yaml).
+Open [`apps/scenarios/demo-markdown.yaml`](../../apps/scenarios/demo-markdown.yaml).
 
 Find this update:
 
@@ -62,7 +62,7 @@ first interactive event is observable through the A2A endpoint.
 Restore the original phrase, or discard the experiment:
 
 ```bash
-git checkout -- apps/scenarios/markdown-happy-path.yaml
+git checkout -- apps/scenarios/demo-markdown.yaml
 ```
 
 Run the remote tests once more. They pass after the expected event text is

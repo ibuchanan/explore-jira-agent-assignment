@@ -1,7 +1,7 @@
 # Demonstrates a request that cannot start normally: the target
 # repository no longer exists, so access can never be granted and the task
 # is refused before execution begins.
-id: repository-access-unavailable-rejection
+id: access-unavailable
 match:
   contains:
     - "legacy reports"

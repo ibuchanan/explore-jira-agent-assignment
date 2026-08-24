@@ -125,61 +125,37 @@ test("selects every short trigger within a natural Jira summary", () => {
   for (const [summary, id] of [
     [
       "Request the repository connection for the release automation.",
-      "auth-required-connection-configuration",
+      "auth-required",
     ],
     [
       "Start the repository migration after the readiness review.",
-      "cancellation-during-work",
+      "cancellation",
     ],
-    [
-      "Investigate the login fix in the session refresh flow.",
-      "coding-agent-happy-path",
-    ],
+    ["Investigate the login fix in the session refresh flow.", "demo-coding"],
     [
       "For this experiment, reject now without processing the request.",
-      "immediate-rejection",
+      "rejected",
     ],
     [
       "Wait for repository approval before beginning deployment.",
-      "initial-auth-required-resumption",
+      "auth-resume",
     ],
-    [
-      "Confirm the target environment before the rollout.",
-      "initial-input-required-resumption",
-    ],
-    [
-      "Review the checkout criteria before implementation.",
-      "input-required-clarification-resumption",
-    ],
-    [
-      "Prepare a checkout rollout assessment before release.",
-      "checkout-rollout-assessment",
-    ],
+    ["Confirm the target environment before the rollout.", "input-resume"],
+    ["Review the checkout criteria before implementation.", "clarification"],
+    ["Prepare a checkout rollout assessment before release.", "demo-streaming"],
     [
       "Exercise the jira callback auth path in this task.",
-      "jira-callback-auth-required",
+      "jira-auth-required",
     ],
-    [
-      "Exercise the jira callback failed path in this task.",
-      "jira-callback-failed",
-    ],
-    [
-      "Exercise the jira callback rejected path in this task.",
-      "jira-callback-rejected",
-    ],
-    [
-      "Exercise the jira callbacks integration for this task.",
-      "jira-callbacks",
-    ],
-    ["Please show markdown in the result.", "markdown-happy-path"],
+    ["Exercise the jira callback failed path in this task.", "jira-failed"],
+    ["Exercise the jira callback rejected path in this task.", "jira-rejected"],
+    ["Exercise the jira callbacks integration for this task.", "demo-jira"],
+    ["Please show markdown in the result.", "demo-markdown"],
     [
       "Prepare the maintenance change for archived reports this week.",
-      "repository-access-revoked-failure",
+      "access-revoked",
     ],
-    [
-      "Review the legacy reports cleanup request.",
-      "repository-access-unavailable-rejection",
-    ],
+    ["Review the legacy reports cleanup request.", "access-unavailable"],
   ] as const)
     assert.equal(selectScenario(scenarios, summary).id, id, summary);
 });

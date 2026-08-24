@@ -1,5 +1,5 @@
 # Interactive renderer-observation scenario: canonical A2A state transitions.
-id: markdown-happy-path
+id: demo-markdown
 match:
   contains:
     - "show markdown"

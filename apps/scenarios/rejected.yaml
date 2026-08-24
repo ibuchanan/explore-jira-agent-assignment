@@ -1,6 +1,6 @@
 # Demonstrates a request that cannot start normally: streaming
 # begins with an immediate terminal state instead of `working`.
-id: immediate-rejection
+id: rejected
 match:
   contains:
     - "reject now"

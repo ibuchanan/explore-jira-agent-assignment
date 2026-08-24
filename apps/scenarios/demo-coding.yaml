@@ -1,6 +1,6 @@
 # A review-ready coding-agent delivery.
 # cspell:ignore supabase
-id: coding-agent-happy-path
+id: demo-coding
 match:
   contains:
     - "login fix"

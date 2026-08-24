@@ -1,6 +1,6 @@
 # Demonstrates streaming as live decision support: each artifact chunk is useful
 # before the final recommendation is ready, and the final brief remains in Jira.
-id: checkout-rollout-assessment
+id: demo-streaming
 match:
   contains:
     - "checkout rollout assessment"

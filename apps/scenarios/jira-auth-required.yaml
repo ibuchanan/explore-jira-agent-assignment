@@ -1,5 +1,5 @@
 # Demonstrates an authorization need before a Jira transition.
-id: jira-callback-auth-required
+id: jira-auth-required
 match:
   contains:
     - "jira callback auth"

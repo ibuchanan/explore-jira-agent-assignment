@@ -1,7 +1,7 @@
 # Default Scenario: runs when no other scenario's `match.contains` phrases
 # are found in the starting task text. Kept as a small, generic happy path;
 # Richer coding-agent scenarios live in their own files.
-id: default-happy-path
+id: demo-default
 default: true
 steps:
   - event: status-update

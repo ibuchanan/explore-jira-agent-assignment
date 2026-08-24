@@ -1,7 +1,7 @@
 # A task that is actively working and has already produced an artifact when
 # cancellation is requested. Task cancellation stops playback and ends the
 # stream before the scenario reaches its `completed` step.
-id: cancellation-during-work
+id: cancellation
 match:
   contains:
     - "repository migration"

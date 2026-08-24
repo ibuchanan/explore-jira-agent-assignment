@@ -1,5 +1,5 @@
 # Demonstrates a pre-acceptance inability to perform a Jira read.
-id: jira-callback-rejected
+id: jira-rejected
 match:
   contains:
     - "jira callback rejected"

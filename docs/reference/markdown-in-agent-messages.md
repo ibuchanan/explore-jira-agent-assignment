@@ -19,7 +19,7 @@ The scenario format does not parse, validate, or transform Markdown.
 
 ## Markdown happy-path scenario
 
-`apps/scenarios/markdown-happy-path.yaml` is a renderer-observation scenario.
+`apps/scenarios/demo-markdown.yaml` is a renderer-observation scenario.
 It is selected when the starting message contains `show markdown`. Its updates
 exercise these ordinary Markdown constructs:
 
@@ -42,5 +42,5 @@ Jira client, not to assert that Jira supports every construct.
 ## Related implementation
 
 - [`apps/scenarios/README.md`](../../apps/scenarios/README.md) — scenario fields and playback behavior
-- [`apps/scenarios/markdown-happy-path.yaml`](../../apps/scenarios/markdown-happy-path.yaml) — demonstration data
+- [`apps/scenarios/demo-markdown.yaml`](../../apps/scenarios/demo-markdown.yaml) — demonstration data
 - [`apps/remote/src/server.ts`](../../apps/remote/src/server.ts) — A2A message and artifact construction

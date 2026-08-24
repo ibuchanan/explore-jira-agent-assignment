@@ -2,7 +2,7 @@
 # task has already been accepted and started, and cannot be recovered
 # through authorization. Ends in `failed` with a diagnostic Artifact
 # preserving the unpushed fix for manual application.
-id: repository-access-revoked-failure
+id: access-revoked
 match:
   contains:
     - "archived reports"

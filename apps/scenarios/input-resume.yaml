@@ -1,5 +1,5 @@
 # Initial clarification before ordinary work begins.
-id: initial-input-required-resumption
+id: input-resume
 match:
   contains:
     - "target environment"

@@ -111,7 +111,7 @@ experience. To run the simulated coding flow, use a task containing:
 Investigate the login fix in the session refresh flow
 ```
 
-The simulator selects `coding-agent-happy-path`. Jira shows the task progress,
+The simulator selects `demo-coding`. Jira shows the task progress,
 pauses for the scenario's approval prompts, and then displays the simulated
 patch, verification report, and review handoff before completion.
 

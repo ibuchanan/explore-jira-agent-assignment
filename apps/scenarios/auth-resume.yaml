@@ -1,5 +1,5 @@
 # Initial authorization before ordinary work begins.
-id: initial-auth-required-resumption
+id: auth-resume
 match:
   contains:
     - "repository approval"

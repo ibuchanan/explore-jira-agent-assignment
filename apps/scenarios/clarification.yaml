@@ -1,7 +1,7 @@
 # A single, clearly labeled Input Need
 # pause (`input-required`) for an ambiguous acceptance-criteria detail,
 # then resumption to `working` once the user supplies the missing detail.
-id: input-required-clarification-resumption
+id: clarification
 match:
   contains:
     - "checkout criteria"

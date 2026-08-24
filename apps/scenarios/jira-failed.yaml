@@ -1,5 +1,5 @@
 # Demonstrates an unrecoverable post-acceptance Jira comment failure.
-id: jira-callback-failed
+id: jira-failed
 match:
   contains:
     - "jira callback failed"

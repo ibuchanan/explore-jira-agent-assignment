@@ -201,9 +201,7 @@ test("resumes a paused scenario with working before completion", async () => {
 });
 
 test("plays the rich simulated coding-agent lifecycle", async () => {
-  const scenario = loadScenarios().find(
-    ({ id }) => id === "coding-agent-happy-path",
-  );
+  const scenario = loadScenarios().find(({ id }) => id === "demo-coding");
   assert.ok(scenario);
 
   const runner = createScenarioRunner({
