@@ -1,15 +1,10 @@
-# Simulated Coding Remote Agent: a single, clearly labeled Input Need
+# A single, clearly labeled Input Need
 # pause (`input-required`) for an ambiguous acceptance-criteria detail,
 # then resumption to `working` once the user supplies the missing detail.
-# @see specs/tickets/07-input-required-clarification-resumption.md
-# @see docs/adr/0014-input-required-is-for-work-clarification.md
-# @see docs/adr/0031-input-needs-are-clearly-labeled.md
-# @see docs/adr/0015-interrupted-tasks-resume-same-task.md
-# @see docs/adr/0017-resumption-emits-working-before-content.md
 id: input-required-clarification-resumption
 match:
   contains:
-    - "clarify the acceptance criteria for the checkout redesign"
+    - "checkout criteria"
 steps:
   - event: status-update
     state: working

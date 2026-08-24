@@ -1,10 +1,10 @@
-# Demonstrates a pre-acceptance inability to perform a simulated Jira read.
+# Demonstrates a pre-acceptance inability to perform a Jira read.
 id: jira-callback-rejected
 match:
   contains:
-    - "simulate rejected jira callback"
+    - "jira callback rejected"
 steps:
   - event: jira-callback
     action: read
     result: rejected
-    message: "**Simulated Jira read was rejected before acceptance; no Jira work item was read.**"
+    message: "**The Jira read was rejected before task acceptance.**"

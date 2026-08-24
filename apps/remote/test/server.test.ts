@@ -343,7 +343,7 @@ test("selects the first case-insensitive matching scenario", async (t) => {
           contextId: "match-context",
           messageId: "match-message",
           role: "ROLE_USER",
-          parts: [{ text: "Please FIX THE LOGIN BUG today" }],
+          parts: [{ text: "Please investigate the LOGIN FIX today" }],
         },
       },
     }),
@@ -876,7 +876,7 @@ test("streams a coding delivery plan before requiring approval", async (t) => {
           contextId: "coding-context",
           messageId: "coding-message",
           role: "ROLE_USER",
-          parts: [{ text: "Please fix the login bug today" }],
+          parts: [{ text: "Please investigate the login fix today" }],
         },
       },
     }),
@@ -895,6 +895,58 @@ test("streams a coding delivery plan before requiring approval", async (t) => {
     assert.ok(index > previous, `expected ${event} after the previous event`);
     previous = index;
   }
+});
+
+test("resumes a paused coding task over streaming", async (t) => {
+  const { request, token } = await createFixture(t);
+  const initial = await request({
+    token: token(),
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: "coding-stream-start",
+      method: "SendStreamingMessage",
+      params: {
+        message: {
+          contextId: "coding-resume-context",
+          messageId: "coding-stream-start-message",
+          role: "ROLE_USER",
+          parts: [{ text: "Please investigate the login fix today" }],
+        },
+      },
+    }),
+  });
+
+  assert.equal(initial.status, 200);
+  const initialStream = await initial.text();
+  const taskId = /"id":"([^"]+)","contextId":"coding-resume-context"/.exec(
+    initialStream,
+  )?.[1];
+  assert.ok(taskId, "expected the initial stream to include its task ID");
+  assert.match(initialStream, /TASK_STATE_INPUT_REQUIRED/);
+
+  const resumed = await request({
+    token: token(),
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: "coding-stream-resume",
+      method: "SendStreamingMessage",
+      params: {
+        message: {
+          taskId,
+          contextId: "coding-resume-context",
+          messageId: "coding-stream-resume-message",
+          role: "ROLE_USER",
+          parts: [{ text: "Approve delivery plan" }],
+        },
+      },
+    }),
+  });
+
+  assert.equal(resumed.status, 200);
+  const stream = await resumed.text();
+  assert.match(stream, /Repository analysis/);
+  assert.match(stream, /Repository assessment/);
+  assert.doesNotMatch(stream, /UnsupportedOperationError/);
 });
 
 test("returns the first Markdown example in an input-required prompt", async (t) => {
@@ -949,13 +1001,16 @@ test("streams rejected and failed scenarios with their correct terminal outcomes
     return response.text();
   };
 
-  const rejected = await stream("rejected", "reject immediately");
+  const rejected = await stream(
+    "rejected",
+    "For this experiment, reject now without processing the request.",
+  );
   assert.match(rejected, /TASK_STATE_REJECTED/);
   assert.equal(rejected.includes("TASK_STATE_WORKING"), false);
 
   const failed = await stream(
     "failed",
-    "push the fix to the archived-reports repository",
+    "Prepare the maintenance change for archived reports this week.",
   );
   const working = failed.indexOf("TASK_STATE_WORKING");
   const diagnostic = failed.indexOf("unapplied-patch-1");
@@ -1090,7 +1145,7 @@ test("resumes a clarification pause on the same task", async (t) => {
           role: "ROLE_USER",
           parts: [
             {
-              text: "Clarify the acceptance criteria for the checkout redesign",
+              text: "Please review the checkout criteria before implementation.",
             },
           ],
         },
@@ -1136,48 +1191,36 @@ test("resumes a clarification pause on the same task", async (t) => {
   );
 });
 
-test("resumes an authorization pause on the same task", async (t) => {
+test("reports a repository connection configuration requirement", async (t) => {
   const { request, token } = await createFixture(t);
-  const send = (id: string, message: Record<string, unknown>) =>
-    request({
-      token: token(),
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id,
-        method: "SendMessage",
-        params: { message },
-      }),
-    });
-  const initial = await send("authorization-start", {
-    contextId: "authorization-context",
-    messageId: "authorization-start-message",
-    role: "ROLE_USER",
-    parts: [{ text: "Push the hotfix to the repository" }],
+  const response = await request({
+    token: token(),
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: "connection-configuration-required",
+      method: "SendMessage",
+      params: {
+        configuration: { returnImmediately: true },
+        message: {
+          contextId: "connection-configuration-context",
+          messageId: "connection-configuration-message",
+          role: "ROLE_USER",
+          parts: [
+            {
+              text: "An administrator needs the repository connection configured.",
+            },
+          ],
+        },
+      },
+    }),
   });
 
-  assert.equal(initial.status, 200);
-  const paused = (await initial.json()) as CompletedResponse;
-  assert.equal(paused.result.task.status.state, "TASK_STATE_AUTH_REQUIRED");
+  assert.equal(response.status, 200);
+  const task = (await response.json()) as CompletedResponse;
+  assert.equal(task.result.task.status.state, "TASK_STATE_AUTH_REQUIRED");
   assert.match(
-    JSON.stringify(paused.result.task),
-    /permission to push commits/i,
-  );
-
-  const resumed = await send("authorization-resume", {
-    taskId: paused.result.task.id,
-    contextId: paused.result.task.contextId,
-    messageId: "authorization-resume-message",
-    role: "ROLE_USER",
-    parts: [{ text: "Approved." }],
-  });
-
-  assert.equal(resumed.status, 200);
-  const completed = (await resumed.json()) as CompletedResponse;
-  assert.equal(completed.result.task.id, paused.result.task.id);
-  assert.equal(completed.result.task.status.state, "TASK_STATE_COMPLETED");
-  assert.match(
-    JSON.stringify(completed.result.task),
-    /release pipeline succeeded/i,
+    JSON.stringify(task.result.task),
+    /administrator must configure the repository connection/i,
   );
 });
 
@@ -1186,11 +1229,11 @@ test("pauses before work for initial clarification and authorization", async (t)
   for (const [state, prompt] of [
     [
       "TASK_STATE_INPUT_REQUIRED",
-      "Start only after confirming the target environment",
+      "Confirm the target environment before the rollout",
     ],
     [
       "TASK_STATE_AUTH_REQUIRED",
-      "Start only after approving repository access",
+      "Wait for repository approval before beginning deployment",
     ],
   ]) {
     const initial = await request({
@@ -1344,7 +1387,11 @@ test("cancels delayed work after retaining its earlier artifact", async (t) => {
           contextId: "cancel-context",
           messageId: "cancel-start-message",
           role: "ROLE_USER",
-          parts: [{ text: "Start the long-running repository migration" }],
+          parts: [
+            {
+              text: "Start the repository migration after the readiness review.",
+            },
+          ],
         },
       },
     }),

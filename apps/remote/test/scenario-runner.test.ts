@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { TaskState } from "@a2a-js/sdk";
 import { createScenarioRunner } from "../src/scenario-runner.js";
-import { loadScenarios, type LoadedScenario } from "../src/scenarios.js";
+import { type LoadedScenario, loadScenarios } from "../src/scenarios.js";
 
 function stateFromEvent(event: unknown): TaskState | undefined {
   if (!event || typeof event !== "object") return undefined;
@@ -13,8 +13,9 @@ function stateFromEvent(event: unknown): TaskState | undefined {
 
 function messageFromEvent(event: unknown): string | undefined {
   if (!event || typeof event !== "object") return undefined;
-  const parts = (event as { data?: { status?: { message?: { parts?: unknown[] } } } })
-    .data?.status?.message?.parts;
+  const parts = (
+    event as { data?: { status?: { message?: { parts?: unknown[] } } } }
+  ).data?.status?.message?.parts;
   const first = parts?.[0] as { content?: { value?: unknown } } | undefined;
   return typeof first?.content?.value === "string"
     ? first.content.value
@@ -228,12 +229,12 @@ test("plays the rich simulated coding-agent lifecycle", async () => {
       entrySurface: "issue-panel",
       invokerId: "user-1",
       tenantId: "tenant-1",
-      text: "fix the login bug",
+      text: "Please investigate the login fix.",
       workItem: { availability: "missing", fields: {} },
     },
     contextId: "context-1",
     taskId: "task-1",
-    userMessage: { parts: [{ text: "fix the login bug" }] },
+    userMessage: { parts: [{ text: "Please investigate the login fix." }] },
   };
 
   await runner.execute(requestContext as never, eventBus as never);

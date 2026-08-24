@@ -1,0 +1,10 @@
+# An agent blocked on an administrator-managed repository connection.
+id: auth-required-connection-configuration
+match:
+  contains:
+    - "repository connection"
+steps:
+  - event: status-update
+    state: auth-required
+    message: "### Repository connection required\n\nA Jira administrator must configure the repository connection before the agent can access the release repository."
+    waitForUserInput: true

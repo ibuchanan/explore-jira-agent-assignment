@@ -452,6 +452,21 @@ export function createScenarioRunner({
           transport: selectedTransport,
         });
       sessions.set(taskId, session);
+      if (existing && selectedTransport === "streaming" && session.status)
+        eventBus.publish(
+          AgentEvent.task(
+            task
+              ? ({ ...(task as object), status: session.status } as never)
+              : {
+                  id: session.taskId,
+                  contextId: session.contextId,
+                  artifacts: [],
+                  history: [],
+                  metadata: {},
+                  status: session.status,
+                },
+          ),
+        );
       diagnostics({
         event: "scenario-selected",
         taskId: session.taskId,
@@ -460,7 +475,7 @@ export function createScenarioRunner({
         tenantId: session.tenantId,
         invokerId: session.invokerId,
         scenarioId: scenario.id,
-        selection: existing ? "resume" : selection?.category ?? "default",
+        selection: existing ? "resume" : (selection?.category ?? "default"),
         transport: session.transport,
         workItemAvailability: invocationContext.workItem.availability,
         commentAvailability: invocationContext.comment.availability,

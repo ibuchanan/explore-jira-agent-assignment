@@ -1,0 +1,75 @@
+# Demonstrates streaming as live decision support: each artifact chunk is useful
+# before the final recommendation is ready, and the final brief remains in Jira.
+id: checkout-rollout-assessment
+match:
+  contains:
+    - "checkout rollout assessment"
+steps:
+  - event: status-update
+    state: working
+    message: "### Checkout rollout assessment started\n\nCollecting rollout signals and validating the release guardrails."
+  - event: artifact-update
+    artifact:
+      artifactId: checkout-rollout-assessment-1
+      name: "Checkout rollout assessment"
+      description: "An evolving evidence brief for a checkout rollout decision."
+      metadata:
+        kind: rollout-assessment
+      parts:
+        - kind: text
+          text: "# Checkout rollout assessment\n\n## Decision question\nShould the redesigned checkout begin a guarded rollout today?\n\n## Proposed scope\nStart with 10% of eligible traffic, then expand only when the release guardrails remain healthy."
+    delayMs: 3000
+  - event: artifact-update
+    artifact:
+      artifactId: checkout-rollout-assessment-1
+      parts:
+        - kind: text
+          text: "\n\n## Evidence collected\n\n| Signal | Observation | Assessment |\n| --- | --- | --- |\n| Payment authorization failures | Within the baseline | No blocker |\n| Checkout conversion | Neutral in the canary cohort | Monitor during rollout |\n| Support contacts | No new checkout-related trend | No blocker |"
+    append: true
+    delayMs: 4000
+  - event: artifact-update
+    artifact:
+      artifactId: checkout-rollout-assessment-1
+      parts:
+        - kind: text
+          text: "\n\n## Risk review\n\n| Risk | Current position | Required control |\n| --- | --- | --- |\n| Guest checkout behavior | Acceptance decision is not recorded | Confirm intended behavior before expanding |\n| Rollback readiness | Rollback path is available | Keep the first stage at 10% |\n| Monitoring coverage | Payment and conversion signals are available | Review the signals for 30 minutes |"
+    append: true
+    delayMs: 4000
+  - event: status-update
+    message: "### Decision point\n\nThe evidence supports a guarded rollout, but guest-checkout behavior needs an explicit owner before expansion."
+    delayMs: 3000
+  - event: artifact-update
+    artifact:
+      artifactId: checkout-rollout-assessment-1
+      parts:
+        - kind: text
+          text: "\n\n## Recommended release plan\n\n1. Begin at 10% of eligible traffic.\n2. Hold for 30 minutes while payment failures and conversion remain within the baseline.\n3. Assign an owner to confirm guest-checkout acceptance behavior before any expansion.\n4. Roll back if payment authorization failures increase above the agreed threshold."
+    append: true
+    lastChunk: true
+    delayMs: 4000
+  - event: status-update
+    state: input-required
+    message: "### Rollout decision required\n\nReply **Approve guarded rollout** to record the 10% rollout plan, or **Defer rollout** to record that guest-checkout acceptance criteria must be clarified first."
+    waitForUserInput: true
+  - event: status-update
+    state: working
+    message: "### Decision recorded\n\nUpdating the rollout assessment and preparing the release handoff."
+    delayMs: 2000
+  - event: artifact-update
+    artifact:
+      artifactId: checkout-rollout-handoff-1
+      name: "Checkout rollout handoff"
+      description: "The decision record and next actions for the release owner."
+      metadata:
+        kind: release-handoff
+      parts:
+        - kind: text
+          text: "# Checkout rollout handoff\n\n## Decision record\nThe requester responded to the rollout decision prompt. Record the chosen direction in the Jira conversation.\n\n## Next actions\n- Confirm the decision owner\n- Record guest-checkout acceptance behavior\n- Apply the agreed rollout or deferral plan\n- Monitor the agreed payment and conversion signals"
+    lastChunk: true
+    delayMs: 3000
+  - event: status-update
+    state: completed
+    message: "### Checkout rollout assessment ready\n\nThe evidence brief, recommended controls, and decision handoff are available for review in this task."
+    final: true
+    showConclusionBeforeCompletion: true
+    delayMs: 2000

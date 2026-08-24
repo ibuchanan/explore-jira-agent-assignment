@@ -1,8 +1,8 @@
-# Simulated initial authorization before ordinary work begins.
+# Initial authorization before ordinary work begins.
 id: initial-auth-required-resumption
 match:
   contains:
-    - "start only after approving repository access"
+    - "repository approval"
 steps:
   - event: status-update
     state: auth-required

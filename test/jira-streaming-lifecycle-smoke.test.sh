@@ -17,11 +17,11 @@ require() {
 }
 
 require 'SendStreamingMessage'
-require 'Fix the login bug'
-require 'Push the hotfix to the repository'
-require 'Start the long-running repository migration'
-require 'same task'
-require 'working'
+require 'Investigate the login fix in the session refresh flow'
+require 'Request the repository connection for the release automation'
+require 'Start the repository migration after the readiness review'
+require 'auth-required'
+require 'Connect'
 require 'canceled'
 require 'no later completion'
 require 'restart/redeployment continuity is not claimed'

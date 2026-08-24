@@ -1,14 +1,11 @@
-# Simulated Coding Remote Agent: repository access is revoked after the
+# Repository access is revoked after the
 # task has already been accepted and started, and cannot be recovered
 # through authorization. Ends in `failed` with a diagnostic Artifact
 # preserving the unpushed fix for manual application.
-# @see specs/tickets/10-terminal-outcome-semantics.md
-# @see docs/adr/0011-failure-details-use-artifacts-only-when-reviewable.md
-# @see docs/adr/0012-rejected-is-pre-execution-refusal.md
 id: repository-access-revoked-failure
 match:
   contains:
-    - "push the fix to the archived-reports repository"
+    - "archived reports"
 steps:
   - event: status-update
     state: working

@@ -29,6 +29,11 @@ rule. Within each scenario, matching checks text, work item, comment, entry
 surface, tenant, then invoker identity; any matching rule selects that
 scenario. If nothing matches, it uses the default scenario.
 
+Text phrases use case-insensitive substring matching and are intentionally short
+(two or three words), so they can be embedded in natural Jira summaries. If
+multiple scenarios match, alphabetical filename order determines the winner;
+keep trigger phrases distinct.
+
 A resumed task keeps the scenario and steps selected for its original task ID.
 
 ## Transport presentation

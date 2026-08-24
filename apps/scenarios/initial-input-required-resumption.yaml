@@ -1,8 +1,8 @@
-# Simulated initial clarification before ordinary work begins.
+# Initial clarification before ordinary work begins.
 id: initial-input-required-resumption
 match:
   contains:
-    - "start only after confirming the target environment"
+    - "target environment"
 steps:
   - event: status-update
     state: input-required

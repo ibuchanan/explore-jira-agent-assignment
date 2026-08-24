@@ -40,7 +40,7 @@ your team's data-handling policy.
 1. In Jira's Rovo experience, invoke **Agent Simulator** with:
 
    ```text
-   Fix the login bug
+   Investigate the login fix in the session refresh flow
    ```
 
 2. Observe the initial `working` delivery-start update and the delivery-plan
@@ -56,27 +56,49 @@ your team's data-handling policy.
    Jira omits, reorders, or collapses review artifacts so their source order
    cannot be verified.
 
-## Verify pause and same-task resumption
+## Verify live decision-support streaming
+
+1. In Jira's Rovo experience, invoke **Agent Simulator** with:
+
+   ```text
+   Prepare a checkout rollout assessment before release
+   ```
+
+2. Observe the **Checkout rollout assessment** artifact grow in this order:
+   decision question and scope, evidence table, risk review, then recommended
+   release plan. Each chunk should remain readable before the next arrives.
+3. Verify that the agent then presents the **Rollout decision required** prompt.
+   Reply **Approve guarded rollout** or **Defer rollout**.
+4. Verify that Jira renders the **Checkout rollout handoff** artifact and then
+   terminal completion. The evidence brief and handoff should remain available
+   after completion; do not treat transient status text as the audit record.
+5. Record the Task URL or ID, visible artifact order, decision prompt, and
+   resulting completion. Mark the case failed if a chunk is omitted, reordered,
+   or the final artifacts are unavailable after completion.
+
+## Verify configuration-required presentation
 
 1. Invoke **Agent Simulator** with:
 
    ```text
-   Push the hotfix to the repository
+   Request the repository connection for the release automation
    ```
 
-2. Wait for the `auth-required` approval prompt and record its Task URL or ID.
-3. Send a follow-up message from that same task, such as `Approved`.
-4. Verify Jira continues the same task, rather than creating a new one, and
-   displays `working` before the resumed progress and terminal completion.
-5. Record the Task URL or ID, the paused state, the resumed `working` update,
-   and the final state.
+2. Verify Jira displays the `auth-required` state and the message that a Jira
+   administrator must configure the repository connection.
+3. Record the Task URL or ID and the state of Jira's **Connect** control.
+4. Do not send a follow-up message or treat this as a same-task-resumption test.
+   This sample has no Forge configuration page or external OAuth connection, so
+   it intentionally cannot complete the connection flow.
+5. Record the result as an observation of `auth-required` presentation, not as
+   evidence that a repository connection was configured.
 
 ## Verify cancellation is terminal
 
 1. Invoke **Agent Simulator** with:
 
    ```text
-   Start the long-running repository migration
+   Start the repository migration after the readiness review
    ```
 
 2. Wait until Jira displays initial working progress, then cancel the task.
@@ -95,7 +117,8 @@ Add the following result table to the evidence record:
 | --- | --- | --- | --- | --- |
 | Streaming request | | Remote log contains `SendStreamingMessage` | | |
 | Coding presentation | | Progress and review artifacts appear in source order | | |
-| Pause/resume | | Same task emits `working` before subsequent output | | |
+| Live decision support | | Assessment chunks, decision prompt, and final artifacts appear in source order | | |
+| Configuration required | | `auth-required` is shown; record Connect control state | | |
 | Cancellation | | Terminal `canceled`; no later completion | | |
 
 Do not claim that task state survives a remote restart, tunnel loss, Forge

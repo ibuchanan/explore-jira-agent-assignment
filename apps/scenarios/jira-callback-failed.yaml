@@ -1,13 +1,13 @@
-# Demonstrates an unrecoverable post-acceptance simulated Jira comment failure.
+# Demonstrates an unrecoverable post-acceptance Jira comment failure.
 id: jira-callback-failed
 match:
   contains:
-    - "simulate failed jira callback"
+    - "jira callback failed"
 steps:
   - event: status-update
     state: working
-    message: "**Preparing the simulated Jira comment.**"
+    message: "**Preparing the Jira comment.**"
   - event: jira-callback
     action: comment
     result: failed
-    message: "**Simulated Jira comment failed after acceptance; no Jira comment was created.**"
+    message: "**The Jira comment failed after task acceptance.**"

@@ -1,7 +1,6 @@
 # Default Scenario: runs when no other scenario's `match.contains` phrases
 # are found in the starting task text. Kept as a small, generic happy path;
-# richer Simulated Coding Remote Agent scenarios live in their own files.
-# @see docs/adr/0033-simulated-agent-uses-editable-scenarios.md
+# Richer coding-agent scenarios live in their own files.
 id: default-happy-path
 default: true
 steps:

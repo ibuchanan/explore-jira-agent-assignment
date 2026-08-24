@@ -108,7 +108,7 @@ Open your configured Jira site and invoke **Agent Simulator** through the Rovo
 experience. To run the simulated coding flow, use a task containing:
 
 ```text
-Fix the login bug
+Investigate the login fix in the session refresh flow
 ```
 
 The simulator selects `coding-agent-happy-path`. Jira shows the task progress,
