@@ -47,4 +47,4 @@ fi
 
 test "$(cat "$tmp/secretspec-args")" = "--file $root/secretspec.toml set REMOTE_BASE_URL https://test-tunnel.trycloudflare.com"
 test "$(cat "$tmp/npm-args")" = "run $deploy_script"
-test "$(cat "$tmp/output")" = "https://test-tunnel.trycloudflare.com"
+test "$(cat "$tmp/output")" = $'https://test-tunnel.trycloudflare.com\nTunnel up, deploy succeeded, waiting for app traffic'
