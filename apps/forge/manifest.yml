@@ -10,6 +10,7 @@ modules:
   rovo:agentConnector:
     - key: minimal-connector
       name: Agent Simulator
+      icon: resource:agent-resources;icons/noun-conveyor-belt-8405324.svg
       description: Simulates a completed task to verify the A2A connection.
       productContexts:
         - jira
@@ -33,3 +34,6 @@ remotes:
 permissions:
   scopes:
     - read:jira-work
+resources:
+  - key: agent-resources
+    path: resources
