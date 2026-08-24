@@ -19,6 +19,7 @@ modules:
           version: "1.0"
           jsonRpcTransport:
             endpoint: a2a-json-rpc
+            streaming: true
   # See: https://developer.atlassian.com/platform/forge/manifest-reference/endpoint
   endpoint:
     - key: a2a-json-rpc

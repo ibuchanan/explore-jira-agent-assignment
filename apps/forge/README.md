@@ -49,5 +49,4 @@ manifest to opt this connector into SSE; Jira then uses `SendStreamingMessage`.
 
 That manifest setting selects Jira's transport. It is separate from the remote
 Agent Card's `capabilities.streaming`, which reports whether the backend can
-serve SSE for A2A clients. The simulator supports both transports, so its Agent
-Card can advertise streaming while this connector remains on polling.
+serve SSE for A2A clients. Both declare streaming support for this simulator.
