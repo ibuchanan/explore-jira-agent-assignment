@@ -1,8 +1,9 @@
 # Tutorial: Edit a Simulation Scenario
 
 In this tutorial, you will change the Markdown showcase scenario and use the
-remote test suite to observe that the stream contract changed. The simulator
-runs entirely locally; a Jira site and Forge deployment are not required.
+remote test suite to observe that its first interactive update changed. The
+simulator runs entirely locally; a Jira site and Forge deployment are not
+required.
 
 ## 1. Install dependencies
 
@@ -20,8 +21,9 @@ Run the remote backend test suite:
 npm run --workspace=rovo-agent-connector-remote-backend test
 ```
 
-The suite includes a streaming test for the Markdown showcase. It passes when
-the scenario produces its expected updates in order.
+The suite includes a polling test for the Markdown showcase. It passes when
+the simulator combines the source heading with the input prompt in the task
+snapshot Jira retrieves.
 
 ## 3. Open the showcase scenario
 
@@ -31,18 +33,18 @@ Find this update:
 
 ```yaml
 - event: status-update
-  message: "**Bold text** and *italic text* appear in this update."
-  delayMs: 1000
+  state: working
+  message: "# Markdown showcase"
 ```
 
-## 4. Change the demonstrated text
+## 4. Change the demonstrated heading
 
-Replace `Bold text` with `Strong text`, then save the file:
+Replace `Markdown showcase` with `Markdown tour`, then save the file:
 
 ```yaml
 - event: status-update
-  message: "**Strong text** and *italic text* appear in this update."
-  delayMs: 1000
+  state: working
+  message: "# Markdown tour"
 ```
 
 ## 5. Run the tests again
@@ -51,9 +53,9 @@ Replace `Bold text` with `Strong text`, then save the file:
 npm run --workspace=rovo-agent-connector-remote-backend test
 ```
 
-The Markdown showcase test now fails because it expects the original `Bold
-text` update. The test proves the scenario is loaded and its event sequence is
-observable through the A2A endpoint.
+The Markdown showcase test now fails because it expects the original
+`Markdown showcase` heading. The test proves the scenario is loaded and its
+first interactive event is observable through the A2A endpoint.
 
 ## 6. Restore the scenario
 

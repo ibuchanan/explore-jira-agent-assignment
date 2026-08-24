@@ -1,11 +1,15 @@
 # Simulation scenarios
 
-This directory contains YAML scenarios for the A2A Simulator. The remote loads
-all `.yaml` files when it starts, so restart it after changing a scenario:
+This directory contains YAML scenarios for the A2A Simulator. `npm run
+remote:start` loads match conditions at startup and reloads the selected
+scenario's steps when it creates a new task, so you can edit a scenario
+without restarting the local remote. Existing tasks retain the steps selected
+at creation; scenario identities and match conditions remain fixed until the
+remote restarts.
 
-The remote build copies this directory to `apps/remote/dist/scenarios`. Deploy
-that directory alongside the compiled remote; the runtime resolves scenarios
-relative to its compiled module, not the process working directory.
+The remote build copies this directory to `apps/remote/dist/scenarios`. Direct
+or deployed runs use that bundled directory unless `SCENARIO_DIRECTORY` selects
+another directory.
 
 ```bash
 npm run remote:start
@@ -25,7 +29,15 @@ rule. Within each scenario, matching checks text, work item, comment, entry
 surface, tenant, then invoker identity; any matching rule selects that
 scenario. If nothing matches, it uses the default scenario.
 
-A resumed task keeps the scenario selected for its original task ID.
+A resumed task keeps the scenario and steps selected for its original task ID.
+
+## Transport presentation
+
+Scenarios describe canonical A2A states. For a `working` step immediately
+followed by a pausing `input-required` step, the simulator preserves both
+ordered updates for `SendStreamingMessage`. For `SendMessage`, it combines
+both messages into the `input-required` task snapshot so Jira polling can
+retrieve the Markdown before the task pauses.
 
 ## Scenario shape
 

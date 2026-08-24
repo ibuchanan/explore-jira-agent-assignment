@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -158,18 +158,35 @@ export function validateScenarios(
 }
 
 export function bundledScenarioDirectory(): string {
-  return resolve(dirname(fileURLToPath(import.meta.url)), "../scenarios");
+  const moduleDirectory = dirname(fileURLToPath(import.meta.url));
+  const adjacentDirectory = resolve(moduleDirectory, "scenarios");
+  return existsSync(adjacentDirectory)
+    ? adjacentDirectory
+    : resolve(moduleDirectory, "../scenarios");
+}
+
+function scenarioFiles(directory: string): string[] {
+  return readdirSync(directory)
+    .filter((filename) => filename.endsWith(".yaml"))
+    .sort()
+    .map((filename) => resolve(directory, filename));
 }
 
 export function loadScenarios(
   directory = bundledScenarioDirectory(),
 ): LoadedScenario[] {
-  return validateScenarios(
-    readdirSync(directory)
-      .filter((filename) => filename.endsWith(".yaml"))
-      .sort()
-      .map((filename) => parseScenario(resolve(directory, filename))),
-  );
+  return validateScenarios(scenarioFiles(directory).map(parseScenario));
+}
+
+export function loadScenarioSteps(
+  id: string,
+  directory = bundledScenarioDirectory(),
+): ScenarioStep[] {
+  const scenario = scenarioFiles(directory)
+    .map(parseScenario)
+    .find((candidate) => candidate.id === id);
+  if (!scenario) throw new Error(`Scenario ${id} is no longer available`);
+  return scenario.steps;
 }
 
 function normalizeContext(

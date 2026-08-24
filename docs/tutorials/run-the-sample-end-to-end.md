@@ -258,16 +258,11 @@ you now know what "not broken" looked like.
 
 ## Next
 
+- [Tutorial: Observe Interactive Markdown in Jira](observe-interactive-markdown.md) — invoke the interactive Markdown showcase.
 - [Tutorial: Edit a Simulation Scenario](edit-a-simulation-scenario.md) —
   now that the sample is running, change what it streams by editing a YAML
   file instead of code.
 - [How-to: Diagnose FIT auth failures][fit-auth-failures] —
   for when step 10 or step 11 doesn't behave as expected.
-- [Reference: A2A JSON-RPC endpoint](../reference/a2a-json-rpc-endpoint.md) —
-  the wire contract behind what you just watched stream.
-- [Explanation: Why this sample has three separate layers][three-layers] —
-  the reasoning behind the Forge app / remote backend / A2A Simulator split
-  you just stood up.
 
 [fit-auth-failures]: ../how-to-guides/diagnose-fit-auth-failures.md
-[three-layers]: ../explanation/why-three-layers.md

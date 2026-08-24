@@ -7,7 +7,8 @@ const serverResult = createA2aServer();
 
 if (serverResult.isErr()) {
   log.error(
-    "[Forge Remote/FIT] server configuration failed: FORGE_APP_ID is required",
+    serverResult.error,
+    "[Forge Remote/FIT] server configuration failed",
   );
   process.exitCode = 1;
 } else {

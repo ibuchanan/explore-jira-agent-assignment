@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import {
   bundledScenarioDirectory,
   invocationContextFromParts,
+  loadScenarios,
   selectScenario,
 } from "../src/scenarios.js";
 
@@ -14,6 +15,10 @@ test("resolves bundled scenarios from the remote package layout", () => {
     bundledScenarioDirectory(),
     resolve(dirname(fileURLToPath(import.meta.url)), "../scenarios"),
   );
+});
+
+test("loads the bundled scenario collection", () => {
+  assert.ok(loadScenarios().length > 0);
 });
 
 test("normalizes Jira context from an A2A data part", () => {

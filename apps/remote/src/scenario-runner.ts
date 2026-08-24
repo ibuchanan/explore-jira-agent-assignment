@@ -12,8 +12,13 @@ import {
   type RemoteLogRecordLogger,
 } from "@forge-ahead/remote/logging";
 import {
+  projectScenarioSteps,
+  type ScenarioTransport,
+} from "./scenario-presentation.js";
+import {
   invocationContextFromParts,
   type LoadedScenario,
+  type ScenarioStep,
   selectScenarioWithDiagnostic,
 } from "./scenarios.js";
 
@@ -40,6 +45,7 @@ type ScenarioSession = {
   nextStep: number;
   scenario: LoadedScenario;
   sessionId: string;
+  transport: ScenarioTransport;
   status?: TaskStatus;
   taskId: string;
   tenantId: string;
@@ -52,6 +58,8 @@ export type ScenarioRunnerOptions = {
   jiraFetch?: typeof fetch;
   remoteLogger?: RemoteLogRecordLogger;
   scenarios: LoadedScenario[];
+  loadSteps?: (id: string) => ScenarioStep[];
+  transport?: () => ScenarioTransport;
 };
 
 const taskStates: Record<string, TaskState> = {
@@ -215,6 +223,8 @@ export function createScenarioRunner({
   enableRealJiraCallbacks = false,
   jiraFetch = fetch,
   remoteLogger,
+  loadSteps,
+  transport = () => "polling",
 }: ScenarioRunnerOptions): AgentExecutor {
   const sessions = new Map<string, ScenarioSession>();
   const publishStatus = (
@@ -409,11 +419,20 @@ export function createScenarioRunner({
       const existing = sessions.get(taskId);
       const invocationContext = invocationContextFromParts(userMessage.parts);
       const trustedCredentials = jiraCallbackCredentials(requestContext);
-      const selection = selectScenarioWithDiagnostic(
-        scenarios,
-        invocationContext,
-      );
-      const scenario = existing?.scenario ?? selection.scenario;
+      const selection = existing
+        ? undefined
+        : selectScenarioWithDiagnostic(scenarios, invocationContext);
+      const selectedScenario = existing?.scenario ?? selection?.scenario;
+      if (!selectedScenario) return;
+      const requestedTransport = transport();
+      const selectedTransport = existing?.transport ?? requestedTransport;
+      const scenario = existing?.scenario ?? {
+        ...selectedScenario,
+        steps: projectScenarioSteps(
+          loadSteps?.(selectedScenario.id) ?? selectedScenario.steps,
+          selectedTransport,
+        ),
+      };
       const session = existing ?? {
         canceled: false,
         contextId,
@@ -423,7 +442,15 @@ export function createScenarioRunner({
         sessionId: crypto.randomUUID(),
         taskId,
         tenantId: trustedCredentials?.tenantId ?? invocationContext.tenantId,
+        transport: selectedTransport,
       };
+      if (existing && selectedTransport !== requestedTransport)
+        diagnostics({
+          event: "scenario.transport.mismatch",
+          requestedTransport,
+          taskId,
+          transport: selectedTransport,
+        });
       sessions.set(taskId, session);
       diagnostics({
         event: "scenario-selected",
@@ -433,7 +460,8 @@ export function createScenarioRunner({
         tenantId: session.tenantId,
         invokerId: session.invokerId,
         scenarioId: scenario.id,
-        selection: existing ? "resume" : selection.category,
+        selection: existing ? "resume" : selection?.category ?? "default",
+        transport: session.transport,
         workItemAvailability: invocationContext.workItem.availability,
         commentAvailability: invocationContext.comment.availability,
         callbackReadiness: scenario.steps.some(

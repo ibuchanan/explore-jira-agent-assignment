@@ -22,6 +22,11 @@ import {
 } from "@forge-ahead/remote/logging";
 import express, { type Express } from "express";
 import {
+  currentScenarioTransport,
+  runWithScenarioTransport,
+  transportForJsonRpcMethod,
+} from "./scenario-transport.js";
+import {
   createScenarioRunner,
   type Delay,
   type DiagnosticEvent,
@@ -29,6 +34,7 @@ import {
 } from "./scenario-runner.js";
 import {
   type LoadedScenario,
+  loadScenarioSteps,
   loadScenarios,
   validateScenarios,
 } from "./scenarios.js";
@@ -42,6 +48,7 @@ type ServerOptions = {
   jiraFetch?: typeof fetch;
   jwksUrl?: string;
   remoteLogger?: RemoteLogRecordLogger;
+  scenarioDirectory?: string;
   scenarios?: LoadedScenario[];
 };
 
@@ -51,6 +58,12 @@ const remoteLogger: RemoteLogRecordLogger = {
   warn: (record) => log.warn({ ...record }, record.message),
   error: (record) => log.error({ ...record }, record.message),
 };
+
+function jsonRpcMethod(body: unknown): string | undefined {
+  if (typeof body !== "object" || body === null || !("method" in body))
+    return undefined;
+  return typeof body.method === "string" ? body.method : undefined;
+}
 
 const agentCard: AgentCard = {
   name: "Agent Simulator",
@@ -85,6 +98,7 @@ export function createA2aServer({
   jiraFetch = fetch,
   jwksUrl = ATLASSIAN_FORGE_JWKS_URL,
   remoteLogger: configuredRemoteLogger = remoteLogger,
+  scenarioDirectory = process.env.SCENARIO_DIRECTORY,
   scenarios,
 }: ServerOptions = {}): Result<Express, ProblemDetails> {
   if (!appAri)
@@ -94,7 +108,7 @@ export function createA2aServer({
   try {
     loadedScenarios = scenarios
       ? validateScenarios(scenarios)
-      : loadScenarios();
+      : loadScenarios(scenarioDirectory);
   } catch (error) {
     return StandardError.getOrDefault(400).error(
       error instanceof Error ? error.message : "Invalid scenario collection",
@@ -103,7 +117,10 @@ export function createA2aServer({
 
   const reportDiagnostics =
     diagnostics ??
-    ((event: DiagnosticEvent) => log.info(event, "[A2A] diagnostic"));
+    ((event: DiagnosticEvent) =>
+      event.event === "scenario.transport.mismatch"
+        ? log.warn(event, "[A2A] diagnostic")
+        : log.info(event, "[A2A] diagnostic"));
   const requestHandler = new DefaultRequestHandler(
     agentCard,
     new InMemoryTaskStore(),
@@ -114,19 +131,43 @@ export function createA2aServer({
       enableRealJiraCallbacks,
       jiraFetch,
       remoteLogger: configuredRemoteLogger,
+      transport: currentScenarioTransport,
+      ...(scenarios
+        ? {}
+        : {
+            loadSteps: (id) => loadScenarioSteps(id, scenarioDirectory),
+          }),
     }),
   );
   const app = express();
-  app.use((request, _, next) => {
-    log.info(
-      { method: request.method, path: request.path },
-      "[HTTP] request received",
-    );
-    next();
-  });
+  app.use(
+    (
+      request: express.Request,
+      response: express.Response,
+      next: express.NextFunction,
+    ) => {
+      const startedAt = performance.now();
+      response.on("finish", () => {
+        log.info(
+          {
+            durationMs: performance.now() - startedAt,
+            method: request.method,
+            path: request.path,
+            statusCode: response.statusCode,
+          },
+          "[HTTP] request completed",
+        );
+      });
+      next();
+    },
+  );
   app.use(
     "/a2a/json-rpc",
-    (_, __, next) => {
+    (
+      _request: express.Request,
+      _response: express.Response,
+      next: express.NextFunction,
+    ) => {
       log.info("[Forge Remote/FIT] invocation token validation started");
       next();
     },
@@ -135,7 +176,11 @@ export function createA2aServer({
       issuer: "forge/invocation-token",
       jwksUrl,
     }),
-    (request, _, next) => {
+    (
+      request: express.Request,
+      _response: express.Response,
+      next: express.NextFunction,
+    ) => {
       const remoteRequest = request as ForgeRemoteRequest;
       if (remoteRequest.forgeRemoteContext)
         emitRemoteLogRecord(
@@ -147,7 +192,52 @@ export function createA2aServer({
       log.info("[Forge Remote/FIT] invocation token validated");
       next();
     },
-    (_, __, next) => {
+    express.json(),
+    (
+      error: unknown,
+      _request: express.Request,
+      response: express.Response,
+      next: express.NextFunction,
+    ) => {
+      if (error instanceof SyntaxError && "body" in error) {
+        response.status(400).json({
+          jsonrpc: "2.0",
+          id: null,
+          error: { code: -32700, message: "Parse error" },
+        });
+      } else {
+        next(error);
+      }
+    },
+    (
+      request: express.Request,
+      _response: express.Response,
+      next: express.NextFunction,
+    ) =>
+      runWithScenarioTransport(
+        transportForJsonRpcMethod(jsonRpcMethod(request.body)),
+        next,
+      ),
+    (
+      request: express.Request,
+      _response: express.Response,
+      next: express.NextFunction,
+    ) => {
+      log.info(
+        {
+          jsonRpcMethod: jsonRpcMethod(request.body),
+          method: request.method,
+          path: request.path,
+        },
+        "[HTTP] request received",
+      );
+      next();
+    },
+    (
+      _request: express.Request,
+      _response: express.Response,
+      next: express.NextFunction,
+    ) => {
       log.info("[JSON-RPC] request dispatched to A2A handler");
       next();
     },

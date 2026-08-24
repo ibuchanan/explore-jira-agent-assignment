@@ -626,6 +626,12 @@ test("reports every simulated Jira callback action with active invocation correl
 
   assert.equal(response.status, 200);
   const stream = await response.text();
+  assert.ok(
+    diagnostics.some(
+      (event) =>
+        event.event === "scenario-selected" && event.transport === "streaming",
+    ),
+  );
   for (const action of ["read", "comment", "mention", "transition"]) {
     assert.match(
       stream,
@@ -901,14 +907,14 @@ test("streams coding progress and chunked artifacts in declared order", async (t
   }
 });
 
-test("streams a Markdown showcase as ordered status updates", async (t) => {
+test("returns the first Markdown example in an input-required prompt", async (t) => {
   const { request, token } = await createFixture(t);
   const response = await request({
     token: token(),
     body: JSON.stringify({
       jsonrpc: "2.0",
-      id: "markdown-stream",
-      method: "SendStreamingMessage",
+      id: "markdown-poll",
+      method: "SendMessage",
       params: {
         message: {
           contextId: "markdown-context",
@@ -921,27 +927,13 @@ test("streams a Markdown showcase as ordered status updates", async (t) => {
   });
 
   assert.equal(response.status, 200);
-  const stream = await response.text();
-  let previous = -1;
-  for (const content of [
-    "Markdown showcase",
-    "Bold text",
-    "First list item",
-    "First ordered step",
-    "short blockquote",
-    "session.refresh()",
-    "const refreshed",
-    "A2A protocol",
-    "Showcase complete",
-  ]) {
-    const index = stream.indexOf(content);
-    assert.ok(
-      index > previous,
-      `expected ${content} after the previous update`,
-    );
-    previous = index;
-  }
-  assert.match(stream, /text\/markdown/);
+  const task = (await response.json()) as CompletedResponse;
+  assert.equal(task.result.task.status.state, "TASK_STATE_INPUT_REQUIRED");
+  const statusMessage = JSON.stringify(task.result.task.status.message);
+  assert.match(statusMessage, /Markdown showcase/);
+  assert.match(statusMessage, /Input required/);
+  assert.doesNotMatch(statusMessage, /Bold text/);
+  assert.match(statusMessage, /text\/markdown/);
 });
 
 test("streams rejected and failed scenarios with their correct terminal outcomes", async (t) => {
