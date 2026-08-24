@@ -354,7 +354,7 @@ test("selects the first case-insensitive matching scenario", async (t) => {
   assert.equal(body.result.task.status.state, "TASK_STATE_INPUT_REQUIRED");
   const statusMessage = JSON.stringify(body.result.task.status.message);
   assert.match(statusMessage, /Delivery plan ready for approval/);
-  assert.match(statusMessage, /### Goal/);
+  assert.match(statusMessage, /#### Goal/);
   assert.match(statusMessage, /Approve delivery plan/);
 });
 
@@ -887,7 +887,7 @@ test("streams a coding delivery plan before requiring approval", async (t) => {
   const events = [
     "Delivery started",
     "Delivery plan ready for approval",
-    "### Goal",
+    "#### Goal",
   ];
   let previous = -1;
   for (const event of events) {

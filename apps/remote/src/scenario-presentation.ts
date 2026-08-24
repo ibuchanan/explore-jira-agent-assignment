@@ -17,17 +17,42 @@ function isCheckpoint(
   );
 }
 
+function terminateFinalArtifactMarkdown(step: ScenarioStep): ScenarioStep {
+  if (!step.lastChunk || !step.artifact) return step;
+  const lastIndex = step.artifact.parts.length - 1;
+  const lastPart = step.artifact.parts[lastIndex];
+  if (!lastPart || typeof lastPart.text !== "string") return step;
+
+  const suffix = lastPart.text.endsWith("\n\n")
+    ? ""
+    : lastPart.text.endsWith("\n")
+      ? "\n"
+      : "\n\n";
+  if (!suffix) return step;
+
+  return {
+    ...step,
+    artifact: {
+      ...step.artifact,
+      parts: step.artifact.parts.map((part, index) =>
+        index === lastIndex ? { ...part, text: `${part.text}${suffix}` } : part,
+      ),
+    },
+  };
+}
+
 export function projectScenarioSteps(
   steps: ScenarioStep[],
   transport: ScenarioTransport,
 ): ScenarioStep[] {
-  if (transport === "streaming") return steps;
+  const normalized = steps.map(terminateFinalArtifactMarkdown);
+  if (transport === "streaming") return normalized;
 
   const projected: ScenarioStep[] = [];
-  for (let index = 0; index < steps.length; index += 1) {
-    const current = steps[index];
+  for (let index = 0; index < normalized.length; index += 1) {
+    const current = normalized[index];
     if (!current) continue;
-    const next = steps[index + 1];
+    const next = normalized[index + 1];
     if (
       current.event === "status-update" &&
       current.state === "completed" &&

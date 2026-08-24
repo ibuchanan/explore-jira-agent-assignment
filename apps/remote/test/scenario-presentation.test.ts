@@ -71,3 +71,28 @@ test("publishes a polling conclusion before terminal completion", () => {
     },
   ]);
 });
+
+test("terminates final artifact Markdown chunks for every transport", () => {
+  const steps: ScenarioStep[] = [
+    {
+      event: "artifact-update",
+      lastChunk: true,
+      artifact: {
+        artifactId: "patch",
+        parts: [{ text: "```diff\n+const ready = true;\n```" }],
+      },
+    },
+  ];
+
+  for (const transport of ["polling", "streaming"] as const) {
+    const projected = projectScenarioSteps(steps, transport);
+    assert.equal(
+      projected[0]?.artifact?.parts[0]?.text,
+      "```diff\n+const ready = true;\n```\n\n",
+    );
+  }
+  assert.equal(
+    steps[0]?.artifact?.parts[0]?.text,
+    "```diff\n+const ready = true;\n```",
+  );
+});

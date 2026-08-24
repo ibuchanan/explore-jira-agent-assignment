@@ -8,25 +8,25 @@ match:
 steps:
   - event: status-update
     state: working
-    message: "## Delivery started\n\nI’m investigating the login failure and preparing a safe implementation for review."
+    message: "### Delivery started\n\nI’m investigating the login failure and preparing a safe implementation for review."
   - event: jira-callback
     action: read
     delayMs: 500
   - event: status-update
     state: input-required
-    message: "## Delivery plan ready for approval\n\n### Goal\nMake valid renewed sessions pass login validation.\n\n### Scope\n- Inspect the session restore and token refresh path\n- Add regression coverage for renewed and expired sessions\n- Preserve existing rejection and audit behavior\n\n### Guardrails\n- Keep the change scoped to session lifecycle behavior\n- Run focused authentication tests, static analysis, and security checks\n\n### Success criteria\nA renewed session is accepted, an expired session is rejected, and existing logout behavior remains unchanged.\n\nReply **Approve delivery plan** to begin repository analysis, or provide constraints to revise the plan."
+    message: "### Delivery plan ready for approval\n\n#### Goal\nMake valid renewed sessions pass login validation.\n\n#### Scope\n- Inspect the session restore and token refresh path\n- Add regression coverage for renewed and expired sessions\n- Preserve existing rejection and audit behavior\n\n#### Guardrails\n- Keep the change scoped to session lifecycle behavior\n- Run focused authentication tests, static analysis, and security checks\n\n#### Success criteria\nA renewed session is accepted, an expired session is rejected, and existing logout behavior remains unchanged.\n\nReply **Approve delivery plan** to begin repository analysis, or provide constraints to revise the plan."
     waitForUserInput: true
   - event: status-update
     state: working
-    message: "### Repository analysis\n\nReviewing the session restoration and token refresh path against existing validation and regression coverage."
+    message: "#### Repository analysis\n\nReviewing the session restoration and token refresh path against existing validation and regression coverage."
     delayMs: 500
   - event: status-update
     state: input-required
-    message: "## Repository assessment\n\n### Evidence\n- `restoreSession` validates the session before awaiting token refresh\n- Existing regression coverage rejects expired sessions but does not cover renewed sessions\n- The rejection and audit paths are centralized in `validateSession`\n\n### Hypothesis\nA renewed token is not visible to validation because the stale session is validated before refresh completes.\n\n### Technical approach\n1. Await token refresh before validation\n2. Reuse the existing validation and audit paths\n3. Add renewed-session and expired-session regression tests\n\n### Expected impact\nRenewed sessions can complete login without changing invalid-session rejection behavior.\n\n## Technical approach ready for approval\n\nReply **Approve technical approach** to implement and verify this change, or provide revisions."
+    message: "### Repository assessment\n\n#### Evidence\n- `restoreSession` validates the session before awaiting token refresh\n- Existing regression coverage rejects expired sessions but does not cover renewed sessions\n- The rejection and audit paths are centralized in `validateSession`\n\n#### Hypothesis\nA renewed token is not visible to validation because the stale session is validated before refresh completes.\n\n#### Technical approach\n1. Await token refresh before validation\n2. Reuse the existing validation and audit paths\n3. Add renewed-session and expired-session regression tests\n\n#### Expected impact\nRenewed sessions can complete login without changing invalid-session rejection behavior.\n\n### Technical approach ready for approval\n\nReply **Approve technical approach** to implement and verify this change, or provide revisions."
     waitForUserInput: true
   - event: status-update
     state: working
-    message: "### Implementation started\n\nApplying the approved session-lifecycle change and adding focused regression coverage."
+    message: "#### Implementation started\n\nApplying the approved session-lifecycle change and adding focused regression coverage."
   - event: artifact-update
     artifact:
       artifactId: implementation-patch-1
@@ -37,19 +37,19 @@ steps:
         simulated: true
       parts:
         - kind: text
-          text: "## Implementation patch — part 1 of 2\n\n```diff\n--- a/src/auth/session.ts\n+++ b/src/auth/session.ts\n@@ async function restoreSession(session) {\n-  validateSession(session);\n   await refreshToken(session);\n+  validateSession(session);\n }\n```\n\nThe existing validation function and error handling remain unchanged."
+          text: "### Implementation patch — part 1 of 2\n\n```diff\n--- a/src/auth/session.ts\n+++ b/src/auth/session.ts\n@@ async function restoreSession(session) {\n-  validateSession(session);\n   await refreshToken(session);\n+  validateSession(session);\n }\n```\n\nThe existing validation function and error handling remain unchanged."
     delayMs: 500
   - event: artifact-update
     artifact:
       artifactId: implementation-patch-1
       parts:
         - kind: text
-          text: "\n\n## Implementation patch — part 2 of 2\n\n```diff\n--- a/test/auth/session.test.ts\n+++ b/test/auth/session.test.ts\n@@ renewed session\n+it(\"accepts a renewed session after refresh\", async () => {\n+  await expect(restoreSession(renewedSession)).resolves.toMatchObject({\n+    state: \"active\",\n+  });\n+});\n\n@@ expired session\n+it(\"rejects an expired session after refresh\", async () => {\n+  await expect(restoreSession(expiredSession)).rejects.toMatchObject({\n+    code: \"SESSION_EXPIRED\",\n+  });\n+});\n```"
+          text: "\n\n### Implementation patch — part 2 of 2\n\n```diff\n--- a/test/auth/session.test.ts\n+++ b/test/auth/session.test.ts\n@@ renewed session\n+it(\"accepts a renewed session after refresh\", async () => {\n+  await expect(restoreSession(renewedSession)).resolves.toMatchObject({\n+    state: \"active\",\n+  });\n+});\n\n@@ expired session\n+it(\"rejects an expired session after refresh\", async () => {\n+  await expect(restoreSession(expiredSession)).rejects.toMatchObject({\n+    code: \"SESSION_EXPIRED\",\n+  });\n+});\n```"
     append: true
     lastChunk: true
     delayMs: 500
   - event: status-update
-    message: "### Quality gate\n\nRunning the authentication regression suite, type check, lint, dependency scan, and secret scan against the proposed patch."
+    message: "#### Quality gate\n\nRunning the authentication regression suite, type check, lint, dependency scan, and secret scan against the proposed patch."
     delayMs: 500
   - event: artifact-update
     artifact:
@@ -61,11 +61,11 @@ steps:
         simulated: true
       parts:
         - kind: text
-          text: "## Verification report\n\n| Check | Result | Evidence |\n| --- | --- | --- |\n| Authentication regression suite | Passed | 42 tests, including renewed and expired sessions |\n| Type check and lint | Passed | No new diagnostics |\n| Security review | Passed | No token exposure, permission, or dependency changes |\n| Compatibility check | Passed | Logout and invalid-session behavior unchanged |\n\n### Residual risk\nThe change relies on the existing token-refresh timeout. Monitor login timeout rate after rollout."
+          text: "### Verification report\n\n| Check | Result | Evidence |\n| --- | --- | --- |\n| Authentication regression suite | Passed | 42 tests, including renewed and expired sessions |\n| Type check and lint | Passed | No new diagnostics |\n| Security review | Passed | No token exposure, permission, or dependency changes |\n| Compatibility check | Passed | Logout and invalid-session behavior unchanged |\n\n#### Residual risk\nThe change relies on the existing token-refresh timeout. Monitor login timeout rate after rollout."
     lastChunk: true
     delayMs: 500
   - event: status-update
-    message: "### Review preparation\n\nThe proposed patch is verified. I’m packaging the rationale, evidence, risks, and requested reviewer decision."
+    message: "#### Review preparation\n\nThe proposed patch is verified. I’m packaging the rationale, evidence, risks, and requested reviewer decision."
     delayMs: 500
   - event: artifact-update
     artifact:
@@ -77,7 +77,7 @@ steps:
         simulated: true
       parts:
         - kind: text
-          text: "## Review-ready handoff\n\n### Proposed outcome\nRefresh the session token before validation so renewed sessions can complete login.\n\n### Review checklist\n- [ ] Confirm refresh-before-validation is the intended authentication contract\n- [ ] Review the session and regression-test diffs\n- [ ] Confirm the existing timeout is appropriate for rollout monitoring\n\n### Delivery record\n- Branch: `agent/fix-login-session-order`\n- Pull request: [supabase/supabase#48329](https://github.com/supabase/supabase/pull/48329)\n\n### Requested next action\nReview the proposed patch. Approve it for merge, request changes, or provide additional authentication constraints."
+          text: "### Review-ready handoff\n\n#### Proposed outcome\nRefresh the session token before validation so renewed sessions can complete login.\n\n#### Review checklist\n- [ ] Confirm refresh-before-validation is the intended authentication contract\n- [ ] Review the session and regression-test diffs\n- [ ] Confirm the existing timeout is appropriate for rollout monitoring\n\n#### Delivery record\n- Branch: `agent/fix-login-session-order`\n- Pull request: [supabase/supabase#48329](https://github.com/supabase/supabase/pull/48329)\n\n#### Requested next action\nReview the proposed patch. Approve it for merge, request changes, or provide additional authentication constraints."
     lastChunk: true
     delayMs: 500
   - event: jira-callback
@@ -88,7 +88,7 @@ steps:
     delayMs: 500
   - event: status-update
     state: completed
-    message: "## Ready for review\n\nThe approved session-lifecycle change is implemented and verified. Review the pull request: [supabase/supabase#48329](https://github.com/supabase/supabase/pull/48329)."
+    message: "### Ready for review\n\nThe approved session-lifecycle change is implemented and verified. Review the pull request: [supabase/supabase#48329](https://github.com/supabase/supabase/pull/48329)."
     final: true
     showConclusionBeforeCompletion: true
     delayMs: 500

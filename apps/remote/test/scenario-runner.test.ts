@@ -242,7 +242,7 @@ test("plays the rich simulated coding-agent lifecycle", async () => {
     stateFromEvent(events.at(-1)),
     TaskState.TASK_STATE_INPUT_REQUIRED,
   );
-  assert.match(JSON.stringify(events), /### Goal/);
+  assert.match(JSON.stringify(events), /#### Goal/);
 
   await runner.execute(
     {
@@ -256,7 +256,7 @@ test("plays the rich simulated coding-agent lifecycle", async () => {
     stateFromEvent(events.at(-1)),
     TaskState.TASK_STATE_INPUT_REQUIRED,
   );
-  assert.match(JSON.stringify(events), /### Evidence/);
+  assert.match(JSON.stringify(events), /#### Evidence/);
   const secondApprovalEventCount = events.length;
 
   await runner.execute(
