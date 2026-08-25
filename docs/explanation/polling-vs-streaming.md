@@ -14,8 +14,8 @@ The distinction is about delivery, not capability.
 A task can be created,
 progress through working or waiting states,
 and reach a terminal result with either model.
-The question is whether the user benefits f
-rom seeing changes at the cadence of Jira's checks
+The question is whether the user benefits from
+seeing changes at the cadence of Jira's checks
 or as individual changes are produced.
 
 ## Polling is the default task model

@@ -70,6 +70,9 @@ restored.
 
 ## Next
 
-- [`apps/scenarios/README.md`](../../apps/scenarios/README.md) describes the scenario fields.
-- [How to diagnose FIT auth failures](../how-to-guides/diagnose-fit-auth-failures.md) addresses authenticated remote requests.
-- [How a Jira remote agent connector works](../explanation/rovo-agent-connector.md) explains the Forge extension point behind the simulator.
+- [`apps/scenarios/README.md`](../../apps/scenarios/README.md) describes the
+  scenario fields.
+- [How to diagnose FIT auth failures](../how-to-guides/diagnose-fit-auth-failures.md)
+  addresses authenticated remote requests.
+- [How a Jira remote agent connector works](../explanation/rovo-agent-connector.md)
+  explains the Forge extension point behind the simulator.

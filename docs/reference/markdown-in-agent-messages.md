@@ -41,6 +41,9 @@ Jira client, not to assert that Jira supports every construct.
 
 ## Related implementation
 
-- [`apps/scenarios/README.md`](../../apps/scenarios/README.md) — scenario fields and playback behavior
-- [`apps/scenarios/demo-markdown.yaml`](../../apps/scenarios/demo-markdown.yaml) — demonstration data
-- [`apps/remote/src/server.ts`](../../apps/remote/src/server.ts) — A2A message and artifact construction
+- [`apps/scenarios/README.md`](../../apps/scenarios/README.md) — scenario
+  fields and playback behavior
+- [`apps/scenarios/demo-markdown.yaml`](../../apps/scenarios/demo-markdown.yaml)
+  — demonstration data
+- [`apps/remote/src/server.ts`](../../apps/remote/src/server.ts) — A2A message
+  and artifact construction

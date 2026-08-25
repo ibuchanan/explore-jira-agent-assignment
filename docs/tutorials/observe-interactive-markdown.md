@@ -64,6 +64,9 @@ Markdown result.
 
 ## Next
 
-- [Tutorial: Edit a Simulation Scenario](edit-a-simulation-scenario.md) shows how to change a scenario locally.
-- [Simulation scenarios](../../apps/scenarios/README.md) lists the available scenario fields.
-- [How a Jira remote agent connector works](../explanation/rovo-agent-connector.md) explains the connector architecture.
+- [Tutorial: Edit a Simulation Scenario](edit-a-simulation-scenario.md) shows
+  how to change a scenario locally.
+- [Simulation scenarios](../../apps/scenarios/README.md) lists the available
+  scenario fields.
+- [How a Jira remote agent connector works](../explanation/rovo-agent-connector.md)
+  explains the connector architecture.

@@ -7,39 +7,39 @@ Jira remote-agent simulator. It describes the interaction of Jira polling, the
 A2A SDK server, and this connector's task presentation. It is not a substitute
 for the A2A protocol or Forge documentation.
 
-## Supported live Jira behavior
+## Live Jira smoke-test evidence
 
-The ticket 02 smoke suite is presumed to have passed. Under that presumption, the
-following are the observed live Jira streaming behaviors supported by this sample's
-direct connector:
+A successful run of the [streaming lifecycle smoke suite](../how-to-guides/run-jira-streaming-lifecycle-smoke-suite.md)
+provides site- and environment-specific evidence that:
 
 - Jira invoked `SendStreamingMessage` through the direct Forge-to-remote tunnel
   connection.
-- Jira rendered the coding scenario's progress and review artifacts in source order.
+- Jira rendered the coding scenario's progress and review artifacts in source
+  order.
 - Jira resumed the same paused task with `working` before later output.
 - Jira ended a canceled task as terminal `canceled`, without a later completion.
 
-These observations are limited to the deployed app, its current Jira site and Forge
-environment, and the recorded run. They do not establish a general Jira, Forge, or
-A2A compatibility guarantee.
+These observations apply only to the deployed app, Jira site, Forge environment,
+and recorded run. They do not establish a general Jira, Forge, or A2A
+compatibility guarantee.
 
 ## Automated simulator coverage
 
-The deterministic tests in `apps/remote/test/` verify the remote's A2A behavior and
-scenario presentation without Jira rendering, a deployed Forge app, or a public
-tunnel. They cover polling and streaming event construction, task resumption,
-cancellation, rejection, and failure. This is automated simulator coverage, not
-observed live Jira behavior; the Jira-mediated smoke suite is the boundary test for
-platform transport and presentation.
+The deterministic tests in `apps/remote/test/` verify the remote's A2A behavior
+and scenario presentation without Jira rendering, a deployed Forge app, or a
+public tunnel. They cover polling and streaming event construction, task
+resumption, cancellation, rejection, and failure. This is automated simulator
+coverage, not observed live Jira behavior; the Jira-mediated smoke suite is the
+boundary test for platform transport and presentation.
 
 ## Intentional sample limits
 
-The supported topology is a direct Forge-to-remote tunnel connection. The sample does
-not add a relay, custom stream proxy, durable storage, or an event store to make a
-failed smoke case pass. It uses in-memory task state, so restart, tunnel loss,
-redeployment, and reinstallation continuity are intentionally out of scope. Capture
-a failing smoke case as a targeted follow-up instead of broadening this sample into a
-durable or relay-based design.
+The supported topology is a direct Forge-to-remote tunnel connection. The
+sample does not add a relay, custom stream proxy, durable storage, or an event
+store to make a failed smoke case pass. It uses in-memory task state, so restart,
+tunnel loss, redeployment, and reinstallation continuity are intentionally out
+of scope. Capture a failing smoke case as a targeted follow-up instead of
+broadening this sample into a durable or relay-based design.
 
 ## Compatibility matrix
 
@@ -51,14 +51,15 @@ durable or relay-based design.
 | Immediate clarification | Polling (`SendMessage`) with immediate return semantics | Initial `input-required` | Supported as a distinct immediate paused response. | Do not invent a working event solely for presentation. | `apps/scenarios/input-resume.yaml`. |
 | Immediate authentication | Polling (`SendMessage`) with immediate return semantics | Initial `auth-required` | Supported as a distinct immediate paused response. | Do not invent a working event solely for presentation. | `apps/scenarios/auth-resume.yaml`. |
 | Incremental progress | Streaming (`SendStreamingMessage`) | Full event sequence | Jira receives each event on the open stream. | Preserve events; do not apply polling compaction. | `apps/remote/test/scenario-transport.test.ts`. |
-| Later polling update | Polling (`GetTask`) | Current persisted task state | Jira receives the latest meaningful status on its next poll. | Keep durable task state separate from request transport. | `apps/remote/test/server.test.ts` delayed-progress coverage. |
+| Later polling update | Polling (`GetTask`) | Current persisted task state | Jira receives the latest meaningful status on its next poll. | Keep task state separate from request transport. | `apps/remote/test/server.test.ts` delayed-progress coverage. |
 
 ## Required invariants
 
 - A normal active polling task retains the event that establishes the task
   before reporting an input or authentication pause.
 - Streaming event order is preserved.
-- Task state is durable and independent of the HTTP request or SSE connection.
+- Task state is independent of the HTTP request or SSE connection. Production
+  services that need restart or reconnection continuity must use durable storage.
 - Compaction may merge user-visible text but must not mutate source events,
   task identifiers, context identifiers, artifacts, or terminal-state
   semantics.

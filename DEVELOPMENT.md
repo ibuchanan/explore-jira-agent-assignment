@@ -1,127 +1,170 @@
 # Development
 
-This guide gets a new clone registered, connected to a local remote through a Cloudflare Quick Tunnel, and installed in Jira.
+Use this guide to run the reference implementation against a Jira Cloud site.
+The shortest successful path is:
+register this clone as a Forge app,
+start the local A2A remote,
+expose it through a Cloudflare Quick Tunnel,
+deploy the Forge app,
+and install it in Jira.
+
+For a lesson-style walkthrough,
+use [Run the Sample End-to-End](docs/tutorials/run-the-sample-end-to-end.md).
 
 ## Prerequisites
 
-Install the Node.js version in `.nvmrc` and npm `11.17.0` or compatible. The development workflow also requires these native command-line tools:
+Install Node.js 24 (the version in [`.nvmrc`](.nvmrc))
+and npm 11.17.0 or a compatible version.
+You also need these commands on `PATH`:
 
-- `cloudflared`
-- `forge`
-- `secretspec`
-- `yq`
+- [`forge`](https://go.atlassian.com/forge) — authenticate first with `forge login`
+- [`cloudflared`](https://try.cloudflare.com/)
+- [`secretspec`](https://secretspec.dev/)
+- [`yq`](https://mikefarah.gitbook.io/yq)
 
-After cloning the repository, install Node dependencies and verify the native tools:
+You need a Jira Cloud site where you can install Forge apps.
+
+From a new clone,
+install dependencies and verify the native tools:
 
 ```bash
 npm install
 npm run tools:check
+npm run build
+npm test
 ```
 
-## First-time setup
+`npm run build` and `npm test` establish a local baseline
+without Jira or a Forge deployment.
 
-This repository is a clonable sample, not a shared Forge app identity. Each developer must run the interactive [`forge register`](https://developer.atlassian.com/platform/forge/cli-reference/register/) command once for their own clone. Forge registers the app to the Atlassian account running the command and replaces `apps/forge/manifest.yml` with a new app ID; `scripts/register.sh` also stores that UUID as the required `FORGE_APP_ID` configuration value.
+## Run the reference implementation
 
-Do **not** rerun registration in the same clone unless you deliberately need a new app identity. Re-registering replaces the manifest app ID and disconnects the previous identity from its environments, stored variables, provider secrets, and storage.
+### 1. Configure the Jira site and register this clone
 
-1. Store the Jira development site used for installation:
+Each clone needs its own Forge app identity.
+Store the target Jira hostname,
+then register the app interactively:
 
-   ```bash
-   ./scripts/env-var-set.sh FORGE_SITE your-site.atlassian.net
-   ```
+```bash
+./scripts/env-var-set.sh FORGE_SITE your-site.atlassian.net
+./scripts/register.sh
+```
 
-2. Register the Forge app directly. This command is intentionally not an npm script:
+Replace `your-site.atlassian.net` with the hostname of your Jira Cloud site.
+Registration updates `apps/forge/manifest.yml` with a Forge app ARI
+and stores its UUID as `FORGE_APP_ID`.
+Run it once per clone;
+rerunning it deliberately creates a different app identity.
 
-   ```bash
-   ./scripts/register.sh
-   ```
+`REMOTE_BASE_URL` begins as the non-routable bootstrap value
+`https://unconfigured.invalid`.
+The tunnel command replaces it before deployment.
+Do not deploy the placeholder value.
 
-   The script updates `apps/forge/manifest.yml` with the new Forge app ARI and stores its UUID as `FORGE_APP_ID` through SecretSpec. It uses `https://unconfigured.invalid` only as a non-routable bootstrap value for `REMOTE_BASE_URL`.
+### 2. Start the remote
 
-## Run the local integration
-
-Use three terminals after registration.
-
-### Terminal 1: start the remote
+In the first terminal at the repository root:
 
 ```bash
 npm run remote:start
 ```
 
-This starts the remote A2A 1.0 service on `localhost:3000` with the SecretSpec-managed `FORGE_APP_ID`. The remote uses `@a2a-js/sdk` for A2A task and JSON-RPC handling, and `@forge-ahead/remote` for Forge Invocation Token authentication and tenant context.
+The A2A 1.0 remote listens on `localhost:3000`,
+loads the simulator scenarios,
+and validates Forge Invocation Tokens using `FORGE_APP_ID`.
 
-### Terminal 2: create the tunnel and deploy Forge
+### 3. Start a tunnel and deploy Forge
+
+In a second terminal:
 
 ```bash
 npm run forge:deploy:tunnel:approve-system-user-change
 ```
 
-This command starts a Cloudflare Quick Tunnel, stores its generated `https://*.trycloudflare.com` URL as `REMOTE_BASE_URL`, deploys the Forge app, and remains attached to keep the tunnel alive. Leave this terminal running while testing.
+This command opens a Cloudflare Quick Tunnel to the local remote,
+stores its public URL as `REMOTE_BASE_URL`,
+deploys the Forge app,
+and stays attached to keep the tunnel alive.
+The explicit approval covers the first deployment
+when Forge requires `SYSTEM_USER_CHANGE_RULE` approval.
 
-The first deployment requires approval of `SYSTEM_USER_CHANGE_RULE`: the app system user will no longer be @-mentionable. The command makes that approval explicit. Forge may not require the approval on later deployments.
+Quick Tunnel URLs change when the tunnel stops.
+Restart this command before using Jira again after a tunnel interruption.
 
-### Terminal 3: install in Jira
+### 4. Install the app
+
+In a third terminal:
 
 ```bash
 npm run forge:install
 ```
 
-Open Jira on the configured site and invoke **Agent Simulator** through the Rovo experience. A successful smoke test displays a completed confirmation message using Markdown.
+Open Jira on the configured site,
+create a workitem with a subject:
 
-Quick Tunnel URLs change when the tunnel stops. Restart Terminal 2 and rerun its command whenever that occurs.
+```text
+Investigate the login fix in the session refresh flow
+```
+
+Assign **Agent Simulator** to the workitem.
+The `demo-coding` scenario reports progress,
+asks for approval,
+and completes with simulated artifacts.
+
+## Daily development loop
+
+- Change a YAML file under `apps/scenarios/` to change simulator behavior.
+  Read [the scenario reference](apps/scenarios/README.md)
+  for its schema and matching rules.
+- Change the remote under `apps/remote/`,
+  then restart `npm run remote:start`.
+- Run the remote test suite with:
+
+  ```bash
+  npm run --workspace=rovo-agent-connector-remote-backend test
+  ```
+
+- Check all workspaces with `npm run check`;
+  run shell contract tests with
+  `npm run test:scripts`
+  when changing `scripts/` or `test/`.
+- If you change `apps/forge/manifest.yml`,
+  redeploy and upgrade the installed
+  app if its permissions changed:
+
+  ```bash
+  npm run forge:deploy
+  npm run forge:upgrade
+  ```
 
 ## Configuration
 
-SecretSpec is the only configuration boundary. Do not source `.env` manually. When the configured provider is `dotenv`, SecretSpec may manage a local `.env` file, but scripts receive values only through `scripts/env-var.sh` or `scripts/env-var-set.sh`.
+[SecretSpec configuration](secretspec.toml) is the canonical reference for the
+required values, defaults, and descriptions. Do not source `.env` manually;
+scripts obtain values through `scripts/env-var.sh` and set values through
+`scripts/env-var-set.sh`.
 
-| Value | Purpose | Set by |
-| --- | --- | --- |
-| `FORGE_SITE` | Jira development-site hostname for install/uninstall. | `./scripts/env-var-set.sh` during first-time setup. |
-| `FORGE_PRODUCT` | Forge product; defaults to `jira`. | SecretSpec default. |
-| `FORGE_ENVIRONMENT` | Forge environment; defaults to `development`. | SecretSpec default. |
-| `FORGE_APP_ID` | UUID used by the remote to validate Forge Invocation Tokens. | `./scripts/register.sh`. |
-| `REMOTE_BASE_URL` | Public base URL rendered into the Forge manifest. | `scripts/tunnel.sh` via `npm run forge:deploy:tunnel`. |
+## Troubleshooting
 
-`REMOTE_BASE_URL` defaults to `https://unconfigured.invalid` only so Forge can validate and register the manifest before a real tunnel exists. Never deploy with that placeholder.
-
-## `scripts/` reference
-
-| Script | Purpose | Invocation |
-| --- | --- | --- |
-| `env-var.sh` | Runs one trusted command with SecretSpec-injected configuration. | `bash scripts/env-var.sh '<command>'` |
-| `env-var-set.sh` | Writes one named configuration value through SecretSpec. | `./scripts/env-var-set.sh <name> <value>` |
-| `register.sh` | Interactively registers a Forge app, extracts its app ID, and stores it. | `./scripts/register.sh` |
-| `tunnel.sh` | Starts a Quick Tunnel for `http://localhost:3000` and writes `REMOTE_BASE_URL`. | `./scripts/tunnel.sh` |
-| `deploy-tunnel.sh` | Coordinates a Quick Tunnel before Forge deployment and keeps it alive. | `npm run forge:deploy:tunnel` or the named approval command below. |
-| `tools-check.sh` | Checks the four required native tools. | `npm run tools:check` |
-
-## Package scripts
-
-| Command | Purpose |
-| --- | --- |
-| `npm run check` | Runs workspace checks through npm workspaces. |
-| `npm run format` | Formats workspace sources through npm workspaces. |
-| `npm run format:scripts` | Formats shell scripts and shell-test scaffolding with `shfmt`. |
-| `npm run lint` | Lints workspace sources through npm workspaces. |
-| `npm run lint:scripts` | Lints shell scripts and shell-test scaffolding with ShellCheck. |
-| `npm run test` | Runs workspace tests through npm workspaces. |
-| `npm run test:scripts` | Runs disposable shell-script contract tests. |
-| `npm run tools:check` | Verifies `cloudflared`, `forge`, `secretspec`, and `yq` are available. |
-| `npm run remote:start` | Starts the local A2A remote with SecretSpec-injected configuration. |
-| `npm run forge:deploy` | Deploys the Forge workspace without approving behavior changes. |
-| `npm run forge:deploy:approve-system-user-change` | Deploys after explicitly accepting `SYSTEM_USER_CHANGE_RULE`. |
-| `npm run forge:deploy:tunnel` | Starts a tunnel, persists its URL, deploys Forge, and keeps the tunnel alive. |
-| `npm run forge:deploy:tunnel:approve-system-user-change` | Does the same with the explicit system-user approval. |
-| `npm run forge:install` | Installs the Forge app on `FORGE_SITE`. |
-| `npm run forge:uninstall` | Uninstalls the Forge app from `FORGE_SITE`. |
-
-There is intentionally no `npm run forge:register`: Forge registration is interactive and must run as `./scripts/register.sh`.
+- **No request reaches the remote:**
+  confirm that the tunnel process is still running
+  and redeploy after a Quick Tunnel URL changes.
+- **FIT validation fails:**
+  confirm that this clone's current `FORGE_APP_ID` was used to start the remote.
+  Follow [Diagnose a FIT Auth Failure](docs/how-to-guides/diagnose-fit-auth-failures.md).
+- **A manifest or scope change is not visible:**
+  redeploy,
+  then run `npm run forge:upgrade`
+  to update the installed app.
+- **You need a live streaming check:**
+  use the [Jira streaming lifecycle smoke suite](docs/how-to-guides/run-jira-streaming-lifecycle-smoke-suite.md).
 
 ## Repository layout
 
-- `apps/forge/` — Forge manifest and workspace scripts.
-- `apps/remote/` — independently hosted Node.js A2A remote and its tests.
-- `scripts/` — configuration, registration, tunnel, deployment, and prerequisite boundaries.
-- `test/` — disposable shell-script contract tests.
-- `secretspec.toml` — configuration contract used by the shell boundaries.
-- `.scratch/specs/` — the implementation specification.
+- `apps/forge/` — Forge manifest for the installable connector
+- `apps/remote/` — A2A service, FIT authentication, scenario runner, and tests
+- `apps/scenarios/` — scenario data loaded by the remote
+- `scripts/` — native-tool, configuration, registration, tunnel, and
+  deployment wrappers
+- `test/` — shell contract tests
+- `docs/` — documentation set

@@ -1,52 +1,48 @@
-# Forge App for the Remote Agent
+# Forge app for the remote agent
 
-This workspace contains
-the Forge app used by the sample remote-agent integration.
-The app is the Atlassian-facing installable component:
-it declares the Jira remote agent connector,
-wires Jira task traffic to a remote backend,
-and configures the scopes and remote permissions needed by the integration.
+This workspace contains the installable Forge component of the reference
+implementation. Its [`manifest.yml`](manifest.yml) declares the Jira
+`rovo:agentConnector` module and points its A2A 1.0 JSON-RPC transport at the
+remote backend.
 
-## Responsibilities
+The Forge app is middleware, not the agent runtime. The remote service owns
+A2A task handling and agent work; this app makes that remote available to Jira.
 
-The Forge app demonstrates how to:
+## What the manifest declares
 
-- register a Jira remote agent through a `rovo:agentConnector` module
-- route A2A 1.0 JSON-RPC traffic to the remote backend,
-  where `@a2a-js/sdk` owns protocol handling
-  and `@forge-ahead/remote` authenticates Forge traffic
-- route Forge installation lifecycle events to the remote backend
-- request app system and app user token forwarding for the remote service
-- declare the Jira scopes required by the sample
+- a Jira-only agent named **Agent Simulator**;
+- A2A protocol version `1.0`;
+- a JSON-RPC endpoint at `/a2a/json-rpc` forwarded to the configured remote;
+- streaming support, so Jira can use `SendStreamingMessage`; and
+- the `read:jira-work` scope used by the sample.
 
-This app is middleware.
-It does not run the actual external AI agent;
-that belongs in the remote backend or an agent runtime called by the backend.
+`REMOTE_BASE_URL` supplies the remote's public HTTPS base URL at deployment
+time. The local development workflow writes it after creating a Cloudflare
+Quick Tunnel; see [DEVELOPMENT.md](../../DEVELOPMENT.md).
 
 ## Architecture role
 
 ```text
 Jira Cloud
-  │
-  │ invokes the installed remote agent connector
+  │ invokes the installed connector
   ▼
 Forge app
-  │
-  ├─ manifest declares agent connector, endpoints, remote, scopes, and tokens
-  ├─ endpoint modules proxy task traffic to the backend remote
-  └─ installation trigger delivers lifecycle events to the backend remote
+  │ forwards A2A JSON-RPC to the Forge remote endpoint
   ▼
-Remote backend service
+Remote A2A service
 ```
 
-The main source of truth for Forge wiring is [`manifest.yml`](manifest.yml).
+The remote validates the Forge Invocation Token attached to each request before
+it dispatches the request to its A2A handler. This manifest does **not** request
+app-system or app-user access-token forwarding; add and document those remote
+authentication settings only if your agent needs to call Jira APIs.
 
-## A2A transport selection
+## Transport selection
 
-Jira uses polling by default: it sends `SendMessage` and reads progress with
-`GetTask`. Set `protocols.agent2Agent.jsonRpcTransport.streaming: true` in the
-manifest to opt this connector into SSE; Jira then uses `SendStreamingMessage`.
+The manifest sets `protocols.agent2Agent.jsonRpcTransport.streaming: true`.
+That opts this connector into streaming, allowing Jira to send
+`SendStreamingMessage` and receive SSE updates. The remote Agent Card also
+advertises streaming support. Both declarations are needed to represent the
+sample's streaming capability.
 
-That manifest setting selects Jira's transport. It is separate from the remote
-Agent Card's `capabilities.streaming`, which reports whether the backend can
-serve SSE for A2A clients. Both declare streaming support for this simulator.
+For delivery-model guidance, see [Polling vs Streaming](../../docs/explanation/polling-vs-streaming.md).
