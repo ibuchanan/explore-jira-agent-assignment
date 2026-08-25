@@ -25,6 +25,8 @@ Use this repository when you want to:
 - understand the boundary between Jira, Forge, and an A2A remote; or
 - adapt a small, tested starting point for your own remote agent.
 
+<div style="position: relative; padding-bottom: 56.25%; height: 0;"><iframe src="https://www.loom.com/embed/857e42d8bb0149adbecde2555f308d86" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></iframe></div>
+
 It is a reference implementation,
 not a production agent platform.
 The sample uses a Cloudflare Quick Tunnel for local development
