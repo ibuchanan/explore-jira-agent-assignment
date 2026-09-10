@@ -1042,7 +1042,7 @@ test("returns a JSON-RPC error for a SendMessage request without a message", asy
   };
   assert.equal(body.jsonrpc, "2.0");
   assert.equal(body.id, 7);
-  assert.equal(body.error.code, -32603);
+  assert.equal(body.error.code, -32602);
 });
 
 test("rejects invalid requests and reports unsupported methods", async (t) => {

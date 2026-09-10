@@ -19,12 +19,12 @@
     "typecheck": "tsc --project tsconfig.typecheck.json"
   },
   "dependencies": {
-    "@a2a-js/sdk": "^1.0",
+    "@a2a-js/sdk": "^1.1",
     "@forge-ahead/errors": "github:ibuchanan/forge-ahead-errors",
     "@forge-ahead/logging": "github:ibuchanan/forge-ahead-logging",
     "@forge-ahead/remote": "github:ibuchanan/forge-ahead-remote",
     "express": "^5.2",
-    "yaml": "^2.8"
+    "yaml": "^2.9"
   },
   "devDependencies": {
     "@types/express": "^5.0"

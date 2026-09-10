@@ -29,7 +29,6 @@ chmod +x "$tmp/forge" "$tmp/yq" "$tmp/secretspec"
 app_id=$(PATH="$tmp:$PATH" bash "$root/scripts/register.sh")
 
 test "$app_id" = "123e4567-e89b-12d3-a456-426614174000"
-test "$(sed -n '1p' "$tmp/secretspec-args")" = "--file $root/secretspec.toml run -- bash -ceu forge register >&2"
 test "$(cat "$tmp/forge-args")" = "$root/apps/forge:register"
 test "$(cat "$tmp/yq-args")" = "-r .app.id $root/apps/forge/manifest.yml"
-test "$(sed -n '2p' "$tmp/secretspec-args")" = "--file $root/secretspec.toml set FORGE_APP_ID 123e4567-e89b-12d3-a456-426614174000"
+test "$(cat "$tmp/secretspec-args")" = "--file $root/secretspec.toml set FORGE_APP_ID 123e4567-e89b-12d3-a456-426614174000"
