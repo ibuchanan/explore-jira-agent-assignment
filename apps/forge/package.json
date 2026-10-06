@@ -6,7 +6,7 @@
   "license": "Apache-2.0",
   "scripts": {
     "check": "npm run lint",
-    "forge:deploy": "bash ../../scripts/env-var.sh 'forge deploy --environment \"$FORGE_ENVIRONMENT\"'",
+    "forge:deploy": "bash ../../scripts/env-var.sh 'forge deploy --approve MAJOR_VERSION_RULE --environment \"$FORGE_ENVIRONMENT\"'",
     "forge:deploy:approve-system-user-change": "bash ../../scripts/env-var.sh 'forge deploy --environment \"$FORGE_ENVIRONMENT\" --approve SYSTEM_USER_CHANGE_RULE'",
     "forge:install": "bash ../../scripts/env-var.sh 'forge install --site \"$FORGE_SITE\" --product \"$FORGE_PRODUCT\" --environment \"$FORGE_ENVIRONMENT\" --non-interactive'",
     "forge:uninstall": "bash ../../scripts/env-var.sh 'forge uninstall --site \"$FORGE_SITE\" --product \"$FORGE_PRODUCT\" --environment \"$FORGE_ENVIRONMENT\"'",
