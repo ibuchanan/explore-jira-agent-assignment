@@ -76,6 +76,9 @@ protocol requirements, and deployment behavior.
 
 ## Related material
 
+- [Rovo Agents vs Remote Agent Connectors](rovo-agent-vs-agent-connector.md) —
+  when to use `rovo:agent` with actions instead of a connector, and why
+  long-running work favors a connector
 - [`apps/forge/manifest.yml`](../../apps/forge/manifest.yml) — the connector,
   endpoint, remote, and scope declarations in this sample
 - [`apps/remote/src/server.ts`](../../apps/remote/src/server.ts) — FIT
