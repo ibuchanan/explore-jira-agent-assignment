@@ -77,24 +77,32 @@ npm run remote:start
 The remote listens on `localhost:3000` and validates Forge Invocation Tokens
 before serving A2A requests. Leave this terminal running.
 
-## 6. Create a tunnel and deploy Forge
+## 6. Create a tunnel
 
 Open a second terminal at the repository root and run:
 
 ```bash
-npm run forge:deploy:tunnel:approve-system-user-change
+npm run tunnel:start
 ```
 
 This command starts a Cloudflare Quick Tunnel to the local remote, saves its
-public URL as `REMOTE_BASE_URL`, and deploys the Forge app. Keep it running:
+public URL as `REMOTE_BASE_URL`, and prints the URL. Keep it running:
 Quick Tunnel URLs expire when the tunnel stops.
+
+## 7. Deploy and install the app
+
+After the tunnel prints its URL, open a third terminal at the repository root
+and deploy the Forge app:
+
+```bash
+npm run forge:deploy:approve-system-user-change
+```
 
 The first deployment may require the explicit
 `SYSTEM_USER_CHANGE_RULE` approval included in this command.
+Later deployments can use `npm run forge:deploy`.
 
-## 7. Install the app
-
-Open a third terminal at the repository root and run:
+Then install the app:
 
 ```bash
 npm run forge:install
@@ -124,6 +132,21 @@ You now have three active pieces working together:
 - the local A2A Simulator remote backend.
 
 The Forge app points directly to the tunnel URL in this development path.
+
+## Clean up
+
+Uninstall the app before you stop the tunnel and remote; otherwise Jira keeps
+an installation whose backend no longer exists:
+
+```bash
+npm run forge:uninstall
+```
+
+Then stop the tunnel and remote terminals with Ctrl+C.
+
+Now that you have seen each piece, you can run them as one session for day-to-day
+work. `npm run session:start` does every step from 5 to 7, and when you stop
+it, it also does this clean-up. See [Development](../../DEVELOPMENT.md).
 
 ## Next
 

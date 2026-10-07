@@ -9,6 +9,7 @@
     "build": "rm -rf dist && tsc && cp -R ../scenarios dist/scenarios",
     "build:test": "rm -rf dist && tsc --project tsconfig.test.json && cp -R ../scenarios dist/scenarios",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run test",
+    "dev": "npm run build && bash ../../scripts/env-var.sh 'tsc --watch --preserveWatchOutput & SCENARIO_DIRECTORY=../scenarios node --watch dist/index.js'",
     "format": "biome format --write",
     "format:check": "biome format",
     "lint": "npm run lint:check",

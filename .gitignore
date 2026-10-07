@@ -266,6 +266,7 @@ $RECYCLE.BIN/
 # Additional ignores
 .fallow/
 .scratch/
+.session/
 vendor/
 
 # CocoIndex Code (ccc)

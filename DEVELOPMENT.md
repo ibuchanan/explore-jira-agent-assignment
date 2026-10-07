@@ -61,43 +61,42 @@ rerunning it deliberately creates a different app identity.
 The tunnel command replaces it before deployment.
 Do not deploy the placeholder value.
 
-### 2. Start the remote
+### 2. Start a session
 
-In the first terminal at the repository root:
-
-```bash
-npm run remote:start
-```
-
-The A2A 1.0 remote listens on `localhost:3000`,
-loads the simulator scenarios,
-and validates Forge Invocation Tokens using `FORGE_APP_ID`.
-
-### 3. Start a tunnel and deploy Forge
-
-In a second terminal:
+At the repository root:
 
 ```bash
-npm run forge:deploy:tunnel:approve-system-user-change
+npm run session:start:approve-system-user-change
 ```
 
-This command opens a Cloudflare Quick Tunnel to the local remote,
-stores its public URL as `REMOTE_BASE_URL`,
-deploys the Forge app,
-and stays attached to keep the tunnel alive.
 The explicit approval covers the first deployment
-when Forge requires `SYSTEM_USER_CHANGE_RULE` approval.
+when Forge requires `SYSTEM_USER_CHANGE_RULE` approval;
+later sessions can use `npm run session:start`.
 
-Quick Tunnel URLs change when the tunnel stops.
-Restart this command before using Jira again after a tunnel interruption.
+The session owns the whole stack, in order:
 
-### 4. Install the app
+1. starts the A2A 1.0 remote on `localhost:3000` in watch mode
+   (it validates Forge Invocation Tokens using `FORGE_APP_ID`);
+2. opens a Cloudflare Quick Tunnel and stores its URL as `REMOTE_BASE_URL`;
+3. waits until the remote answers `GET /healthz` through the tunnel;
+4. deploys the Forge app;
+5. upgrades the existing installation, or installs if there is none;
+6. holds until you press Ctrl+C, or until the remote or tunnel exits.
 
-In a third terminal:
+On exit it uninstalls the app,
+stops the tunnel and remote,
+and resets `REMOTE_BASE_URL` to the placeholder,
+so Jira never keeps an installation whose backend has gone away.
+Remote and tunnel logs are written to `.session/remote.log`
+and `.session/tunnel.log`; follow them with `tail -f` in other terminals.
 
-```bash
-npm run forge:install
-```
+The individual steps remain available as
+`npm run remote:start`, `npm run tunnel:start`,
+`npm run forge:deploy`, `npm run forge:install`,
+`npm run forge:upgrade`, and `npm run forge:uninstall`.
+If you run them by hand, uninstall before stopping the tunnel.
+
+### 3. Try it in Jira
 
 Open Jira on the configured site,
 create a workitem with a subject:
@@ -116,8 +115,9 @@ and completes with simulated artifacts.
 - Change a YAML file under `apps/scenarios/` to change simulator behavior.
   Read [the scenario reference](apps/scenarios/README.md)
   for its schema and matching rules.
-- Change the remote under `apps/remote/`,
-  then restart `npm run remote:start`.
+- Change the remote under `apps/remote/`;
+  during a session it rebuilds and restarts automatically
+  without changing the tunnel URL or the installation.
 - Run the remote test suite with:
 
   ```bash
@@ -129,8 +129,8 @@ and completes with simulated artifacts.
   `npm run test:scripts`
   when changing `scripts/` or `test/`.
 - If you change `apps/forge/manifest.yml`,
-  redeploy and upgrade the installed
-  app if its permissions changed:
+  redeploy and upgrade the installed app
+  from another terminal while the session runs:
 
   ```bash
   npm run forge:deploy
@@ -147,8 +147,14 @@ scripts obtain values through `scripts/env-var.sh` and set values through
 ## Troubleshooting
 
 - **No request reaches the remote:**
-  confirm that the tunnel process is still running
-  and redeploy after a Quick Tunnel URL changes.
+  confirm that the session is still running;
+  restart it after a tunnel interruption,
+  because Quick Tunnel URLs change.
+- **The app is still installed after a session ended:**
+  the session was killed before teardown finished
+  (for example, a closed terminal tab).
+  The next session repairs it by upgrading,
+  or run `npm run forge:uninstall`.
 - **FIT validation fails:**
   confirm that this clone's current `FORGE_APP_ID` was used to start the remote.
   Follow [Diagnose a FIT Auth Failure](docs/how-to-guides/diagnose-fit-auth-failures.md).
@@ -165,6 +171,6 @@ scripts obtain values through `scripts/env-var.sh` and set values through
 - `apps/remote/` — A2A service, FIT authentication, scenario runner, and tests
 - `apps/scenarios/` — scenario data loaded by the remote
 - `scripts/` — native-tool, configuration, registration, tunnel, and
-  deployment wrappers
+  session wrappers
 - `test/` — shell contract tests
 - `docs/` — documentation set

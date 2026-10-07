@@ -7,17 +7,17 @@ operator-run smoke suite: it does not substitute for the deterministic tests in
 
 ## Before you start
 
-Prepare the development integration in three terminals as described in
+Start a development session as described in
 [Development](../../DEVELOPMENT.md):
 
-1. Start the remote with `npm run remote:start`.
-2. Start the tunnel and deploy with
-   `npm run forge:deploy:tunnel:approve-system-user-change`.
-3. Install the development app with `npm run forge:install` if it is not already
-   installed.
+```bash
+npm run session:start
+```
 
-Keep the remote and tunnel terminals open for the entire suite. In the remote
-log, confirm the Jira invocation records `SendStreamingMessage`. Stop and
+Wait for the `[session] ready:` line, and keep the session running for the
+entire suite; stopping it uninstalls the app. In a second terminal, follow the
+remote log with `tail -f .session/remote.log` and confirm the Jira invocation
+records `SendStreamingMessage`. Stop and
 investigate if Jira instead invokes `SendMessage`; this suite validates the
 streaming connector path.
 

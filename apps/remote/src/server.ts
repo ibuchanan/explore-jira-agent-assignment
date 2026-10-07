@@ -161,6 +161,11 @@ export function createA2aServer({
       next();
     },
   );
+  // Unauthenticated readiness probe: lets scripts/session.sh confirm the
+  // remote is reachable through the tunnel before deploying Forge.
+  app.get("/healthz", (_request, response) => {
+    response.status(204).end();
+  });
   app.use(
     "/a2a/json-rpc",
     (

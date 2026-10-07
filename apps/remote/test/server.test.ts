@@ -208,6 +208,18 @@ test("rejects a scenario collection without a default before accepting tasks", (
   assert.match(result.error.detail ?? "", /exactly one Default Scenario/);
 });
 
+test("answers an unauthenticated health check so session scripts can probe readiness", async (t) => {
+  const result = createA2aServer({ appAri: "app" });
+  if (result.isErr()) return assert.fail(result.error.detail);
+  const server = result.value.listen(0, "127.0.0.1");
+  const baseUrl = await url(server);
+  t.after(() => close(server));
+
+  const response = await fetch(`${baseUrl}/healthz`);
+
+  assert.equal(response.status, 204);
+});
+
 test("returns the default scenario task for a verified SendMessage request", async (t) => {
   const { request, token } = await createFixture(t, { appId: "test" });
   const response = await request({
