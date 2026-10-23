@@ -32,7 +32,7 @@
     "typecheck": "npm run --workspaces --if-present typecheck"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.13",
+    "@biomejs/biome": "2.6.2",
     "@types/node": "24",
     "typescript": "^5.9"
   },

@@ -1072,15 +1072,16 @@ test("rejects invalid requests and reports unsupported methods", async (t) => {
       .status,
     404,
   );
+  const unsupportedContentType = await request({
+    token: token(),
+    body: validRequest,
+    contentType: "text/plain",
+  });
+  assert.equal(unsupportedContentType.status, 200);
   assert.equal(
-    (
-      await request({
-        token: token(),
-        body: validRequest,
-        contentType: "text/plain",
-      })
-    ).status,
-    400,
+    ((await unsupportedContentType.json()) as { error: { code: number } }).error
+      .code,
+    -32005,
   );
 
   const malformed = await request({ token: token(), body: "not json" });
